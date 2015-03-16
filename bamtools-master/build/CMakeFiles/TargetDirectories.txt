@@ -1,0 +1,8 @@
+/scratch2/chongchu/bamtools-master/build/src/api/CMakeFiles/APIHeaders.dir
+/scratch2/chongchu/bamtools-master/build/src/api/CMakeFiles/AlgorithmsHeaders.dir
+/scratch2/chongchu/bamtools-master/build/src/api/CMakeFiles/BamTools.dir
+/scratch2/chongchu/bamtools-master/build/src/api/CMakeFiles/BamTools-static.dir
+/scratch2/chongchu/bamtools-master/build/src/utils/CMakeFiles/BamTools-utils.dir
+/scratch2/chongchu/bamtools-master/build/src/CMakeFiles/SharedHeaders.dir
+/scratch2/chongchu/bamtools-master/build/src/toolkit/CMakeFiles/bamtools_cmd.dir
+/scratch2/chongchu/bamtools-master/build/src/third_party/jsoncpp/CMakeFiles/jsoncpp.dir

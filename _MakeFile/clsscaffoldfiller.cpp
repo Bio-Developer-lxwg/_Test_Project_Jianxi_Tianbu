@@ -75,13 +75,14 @@ void ClsScaffoldFiller::FillScaffoldUnit(St_ScaffoldUnit& stScaffoldUnit)
     {
         ofs << ">" << stScaffoldUnit.strName << endl;
         int i = 0;
-        for(vector<St_FillResultBySCReads>::iterator itr = m_stBamReads.vSCResult.begin();
-            itr != m_stBamReads.vSCResult.end(); itr++)
+        for(vector<St_GapRefinedByRept>::iterator itr = stScaffoldUnit.vGapRefinedByRept.begin();
+            itr != stScaffoldUnit.vGapRefinedByRept.end(); itr++)
         {
             ofs << "Gap Index [" << IntToStr(i) << "]:" << endl;
-            ofs << "Fill by Repeats ==>" << itr->pGap->pOrgGap->strFillSeq << endl;
-            ofs << "Fill by PE Reads: Norm Ore ==> " << itr->strFillSeq << endl;
-            ofs << "Fill by PE Reads: Reverse Complementary ==> " << itr->strRevCompFillSeq << endl;
+            ofs << "Fill by Repeats ==>" << itr->pOrgGap->strFillSeq << endl;
+            ofs << "Fill by PE Reads: Norm Ore ==> " << itr->stBamGap.strFillSeq << endl;
+            ofs << "Fill by PE Reads: Reverse Complementary ==> " <<
+                   itr->stBamGap.strRevCompFillSeq << endl;
             i++;
         }
     }
@@ -141,7 +142,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
             if(*itr == *itrRep)
             {
                 bGet = true;
-                stGap.enMatchType = mtNormal;
+                stGap.enLFMatchType = mtNormal;
                 break;
             }
         }
@@ -153,7 +154,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
                 if(*itr == *itrRep)
                 {
                     bGet = true;
-                    stGap.enMatchType = mtCompleRev;
+                    stGap.enLFMatchType = mtCompleRev;
                     break;
                 }
             }
@@ -180,7 +181,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
             if(*itr == *itrRep)
             {
                 bGet = true;
-                stGap.enMatchType = mtNormal;
+                stGap.enRFMatchType = mtNormal;
                 break;
             }
         }
@@ -192,7 +193,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
                 if(*itr == *itrRep)
                 {
                     bGet = true;
-                    stGap.enMatchType = mtCompleRev;
+                    stGap.enRFMatchType = mtCompleRev;
                     break;
                 }
             }
@@ -219,7 +220,26 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
 
 void ClsScaffoldFiller::FillGapByRepeat(St_RepeatUnit& stRepatUnit, St_Gap& stGap)
 {
-    string& strOrg = (stGap.enMatchType == mtNormal) ? stRepatUnit.strNormalSeq : stRepatUnit.strCompleRevSeq;
+    //Get the type of match:
+    En_MatchType enMatchType = mtNone;
+    if(stGap.enLFMatchType == mtNone)
+    {
+        if(stGap.enRFMatchType != mtNone)
+            enMatchType = stGap.enRFMatchType;
+    }
+    else if(stGap.enRFMatchType == mtNone)
+    {
+        if(stGap.enLFMatchType != mtNone)
+            enMatchType = stGap.enLFMatchType;
+    }
+    else // both are not none
+    {
+        if(stGap.enLFMatchType == stGap.enRFMatchType)
+            enMatchType = stGap.enLFMatchType;
+    }
+    if(enMatchType == mtNone) // 不允许左右作match后出现不一致结果的case继续进行
+        return;
+    string& strOrg = (enMatchType == mtNormal) ? stRepatUnit.strNormalSeq : stRepatUnit.strCompleRevSeq;
     //实际上Kmer感觉是用来判定是否可行的，具体怎么弄还是要用动态规划来做
     // evalaute whether the area can be filled by the passed-in repeat
     // use dynamic programming; use a simple score as follows
@@ -381,7 +401,7 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
     //不得不说，还是自己写靠谱！！！！！！！！！！
 
     //Step 1: Clear the old record
-    m_stBamReads.vSCReads.clear();
+    m_stBamFile.vSCReads.clear();
 
     BamReader* pBamReader = new BamReader();
     pBamReader->Open(strBamFilePath);
@@ -392,11 +412,13 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
     vector<int> clipSizes;
     vector<int> readPositions;
     vector<int> genomePositions;
+    int iPossibleGet = 0;
     while(pBamReader->GetNextAlignment(al))
     {        
         int iStart = al.Position;                
         if(iStart > 0) //这个时候应该是证明比上了
         {
+            iPossibleGet++;
             unsigned int iLastLen = clipSizes.size();
             al.GetSoftClips(clipSizes, readPositions, genomePositions);            
             if(clipSizes.size() - iLastLen > 0)
@@ -412,6 +434,7 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
             }
         }
     }
+    cout << IntToStr(iPossibleGet) << endl;
     //use those valid softclip data for gap filling ----->
     FillGapBySoftClipReads();
 
@@ -428,16 +451,17 @@ void ClsScaffoldFiller::UpdateBamReads( BamAlignment& al, St_ScaffoldUnit&  stSc
         itr != stScaffoldUnit.vGapRefinedByRept.end(); itr++)
     {
         //use the breakpoint for confirm if such reads could be used
-        if((iRefPos-COFFSET > itr->stGap.iStartPos && iRefPos-COFFSET < itr->stGap.iEndPos) ||
-           (iRefPos+COFFSET > itr->stGap.iStartPos && iRefPos+COFFSET < itr->stGap.iEndPos) )
+        if((iRefPos-COFFSET > itr->stBamGap.iStartPos && iRefPos-COFFSET < itr->stBamGap.iEndPos) ||
+           (iRefPos+COFFSET > itr->stBamGap.iStartPos && iRefPos+COFFSET < itr->stBamGap.iEndPos) )
         {
             //Could be used then-->
-            AddValidBamReads(al, *itr, icurClipLen, icurClipPos, iRefPos);
+            AddValidSCReads(al, *itr, icurClipLen, icurClipPos, iRefPos);
         }
     }
 }
 
-void ClsScaffoldFiller::AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& stGapRefinedByRept,
+//新增soft clip reads
+void ClsScaffoldFiller::AddValidSCReads(BamAlignment& al, St_GapRefinedByRept& stGapRefinedByRept,
                                          int icurClipLen, int icurClipPos, int iRefPos)
 {
     //Type1: for softclip reads
@@ -472,17 +496,17 @@ void ClsScaffoldFiller::AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& 
     {
         case cpLeft:
         {
-            localAl.optAlign(stSCReads.pGap->stGap.strRefinedLeftFlank,
+            localAl.optAlign(stSCReads.pGap->stBamGap.strRefinedLeftFlank,
                         stSCReads.strClipSeq, iStartOrg, iEndOrg, iStartCmp, iEndCmp);
             int iLen = stSCReads.strClipSeq.length() - iEndCmp -
-                       (iEndOrg - stSCReads.pGap->stGap.strRefinedLeftFlank.length());
+                       (iEndOrg - stSCReads.pGap->stBamGap.strRefinedLeftFlank.length());
             if(iEndCmp < (int)stSCReads.strClipSeq.length()) // that means it could be extend
                 stSCReads.strExtendSeq = stSCReads.strClipSeq.substr(iEndCmp, iLen);
             break;
         }
         case cpRight:
         {
-            localAl.optAlign(stSCReads.pGap->stGap.strRefinedRightFlank,
+            localAl.optAlign(stSCReads.pGap->stBamGap.strRefinedRightFlank,
                     stSCReads.strClipSeq, iStartOrg, iEndOrg, iStartCmp, iEndCmp);
             int iLen = iStartCmp - iStartOrg;
             if(iStartCmp > 0 && iLen > 0)
@@ -490,7 +514,7 @@ void ClsScaffoldFiller::AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& 
             break;
         }
     }
-    m_stBamReads.vSCReads.push_back(stSCReads);
+    m_stBamFile.vSCReads.push_back(stSCReads);
 }
 
 
@@ -499,13 +523,13 @@ bool sortfunction (St_SoftClipReads* pStI, St_SoftClipReads* pStJ)
 
 void ClsScaffoldFiller::FillGapBySoftClipReads()
 {
-    if(m_stBamReads.vSCReads.empty())
+    if(m_stBamFile.vSCReads.empty())
         return;
-    m_stBamReads.vSCResult.clear();
+    //m_stBamFile.vGapAfterRept.clear();
 
     map<St_GapRefinedByRept*, vector<St_SoftClipReads*> > mpGapReads;
-    for(vector<St_SoftClipReads>::iterator itr = m_stBamReads.vSCReads.begin();
-        itr != m_stBamReads.vSCReads.end(); itr++)
+    for(vector<St_SoftClipReads>::iterator itr = m_stBamFile.vSCReads.begin();
+        itr != m_stBamFile.vSCReads.end(); itr++)
     {
         mpGapReads[itr->pGap].push_back(&(*itr));
     }
@@ -527,8 +551,8 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
         for(vector<St_SoftClipReads*>::iterator itrSCReads = itr->second.begin();
             itrSCReads != itr->second.end(); itrSCReads++)
         {
-            if((*itrSCReads)->bRevsStrand)
-                continue;
+            //if((*itrSCReads)->bRevsStrand)//我们在这个地方应该允许所有的符合条件的soft clip reads都进来，然后在最后再去定夺是否需要reverse complementary
+            //    continue;
             cout << Type[(*itrSCReads)->enClipPart] << ": " << (*itrSCReads)->strExtendSeq << endl;
             switch((int)(*itrSCReads)->enClipPart)
             {
@@ -649,17 +673,22 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
             }
         }
 
-        cout << "Left Extend Sum is: " << strLeftExtend << endl;
+        cout << "Left Extend Sum is: " << strLeftExtend  << endl;
         cout << "Right Extend Sum is: " << strRightExtend << endl;
 
         // 合并左flank和右flank
-        string strExtend;        
+        string strExtend;
+        //这里现在是存在bug的，也就是一边有一边没有，这种case是需要着重考虑的
         strExtend = CombineExt(strLeftExtend, strRightExtend/*, iStartOrg, iStartCmp, iEndOrg, iEndCmp*/);        
         //---------->        
         cout << "Additional Extend: " << strExtend << endl;
         string strRevComplment = ClsAlgorithm::GetInstance().GetReverseCompelement(strExtend);
         cout << "Additional Extend(Reverse Complementary): " << strRevComplment << endl;
-        m_stBamReads.vSCResult.push_back(St_FillResultBySCReads(itr->first, strExtend, strRevComplment));
+
+        itr->first->stBamGap.strFillSeq = strExtend;
+        itr->first->stBamGap.strRevCompFillSeq = strRevComplment;
+
+        //m_stBamFile.vGapAfterRept.push_back(St_GapRefinedByRept(itr->first->pOrgGap, strExtend, strRevComplment));
     }
 }
 
@@ -667,8 +696,11 @@ enum En_StringSide{ssLeft=0, ssRight, ssCenter, ssMax};
 //this is a recursive
 string ClsScaffoldFiller::CombineExt(string strExt1, string strExt2/*, int iStart1, int iStart2, int iEnd1, int iEnd2*/)
 {
-    //我们可以考虑一下-->global alignment --> 这样说不定会有比较好的结果 -->今天到此为止吧 --->一会儿去看看python去，完成一下那个老师的作业
+    //Step1: 首先判断两边有一者为空的情况，因为这种情况是需要去作local alignment的（强行做会使得得到的start和end的值异常大，从而导致后面的计算出错）
+    if(strExt1 == "" || strExt2 == "")
+        return strExt1 + strExt2;
 
+    //我们可以考虑一下-->global alignment --> 这样说不定会有比较好的结果 -->今天到此为止吧 --->一会儿去看看python去，完成一下那个老师的作业
     LocalAlignment localAl;//--> 使用现有的库来进行Local Alignment
     int iStart1 = -1, iStart2 = -1, iEnd1 = -1, iEnd2 = -1;
     localAl.optAlign(strExt1, strExt2, iStart1, iEnd1, iStart2, iEnd2);
@@ -836,29 +868,34 @@ void ClsScaffoldFiller::CheckFillQuality(St_ScaffoldUnit& stScaffoldUnit)
     {
         //Notice: the gap cannot be filled will be kept
         //Check each  gaps
-        for(vector<St_FillResultBySCReads>::iterator itrSCR = m_stBamReads.vSCResult.begin(); //SCR: soft clip reads
-            itrSCR != m_stBamReads.vSCResult.end(); itrSCR++)
-        {
-            if(itrSCR->pGap == &(*itr)) //got it
-            {
+        //for(vector<St_GapRefinedByRept>::iterator itrSCR = m_stBamFile.vGapAfterRept.begin(); //SCR: soft clip reads
+        //    itrSCR != m_stBamFile.vGapAfterRept.end(); itrSCR++)
+        //{
+        //    if(itrSCR->pGap == &(*itr)) //got it
+        //    {
                 //Add the repeat
-                stFillUnit.iStart = stFinalScaffoldUnit.strFillByNorm.length() - 1;
-                stFinalScaffoldUnit.strFillByNorm += itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
-                stFinalScaffoldUnit.strFillByNorm += itrSCR->strFillSeq; //Fill by Paired-End reads
-                if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strFillSeq == "")
+                stFillUnit.iStart = stFinalScaffoldUnit.strFillByNorm.length() - 1; //norm仅仅是意味着是正常的方向，并不是意味着修补的方式
+                stFinalScaffoldUnit.strFillByNorm += itr->pOrgGap->strFillSeq; //itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
+                stFinalScaffoldUnit.strFillByNorm += itr->stBamGap.strFillSeq; //itrSCR->stBamGap.strFillSeq; //Fill by Paired-End reads
+                //if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strFillSeq == "")
+                if(itr->pOrgGap->strFillSeq == "" && itr->stBamGap.strFillSeq == "")
                 {
                     //if both filling method are failed to fill any sequences--->Add the gap back to it.
-                    for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    //for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    for(int i=0; i<itr->pOrgGap->iLen; i++)
                     {
                         stFinalScaffoldUnit.strFillByNorm += "N";
                     }
                 }
-                stFinalScaffoldUnit.strFillByRevComp += itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
-                stFinalScaffoldUnit.strFillByRevComp += itrSCR->strRevCompFillSeq;
-                if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strRevCompFillSeq == "")
+                //因为暂时还没有发现repeats是reverse complementary的情况，因此我们在此虽然仅仅是
+                stFinalScaffoldUnit.strFillByRevComp += itr->pOrgGap->strFillSeq;//itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
+                stFinalScaffoldUnit.strFillByRevComp += itr->stBamGap.strRevCompFillSeq;//itrSCR->strRevCompFillSeq;
+                //if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strRevCompFillSeq == "")
+                if(itr->pOrgGap->strFillSeq == "" && itr->stBamGap.strRevCompFillSeq == "")
                 {
                     //if both filling method are failed to fill any sequences--->Add the gap back to it.
-                    for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    //for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    for(int i=0; i<itr->pOrgGap->iLen; i++)
                     {
                         stFinalScaffoldUnit.strFillByRevComp += "N";
                     }
@@ -869,21 +906,27 @@ void ClsScaffoldFiller::CheckFillQuality(St_ScaffoldUnit& stScaffoldUnit)
                 //Add the sequence between current gap and the next gap
                 int iLen = -1;
                 int iStartPos = -1;
-                if(itrSCR + 1 < m_stBamReads.vSCResult.end())
+
+                //if(itrSCR + 1 < m_stBamFile.vSCResult.end()) //将中间的部分填补起来
+                if(itr + 1 < stScaffoldUnit.vGapRefinedByRept.end())
                 {
-                    iLen = (itrSCR+1)->pGap->pOrgGap->iStartPos - itrSCR->pGap->pOrgGap->iEndPos - 1;
-                    iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    //iLen = (itrSCR+1)->pGap->pOrgGap->iStartPos - itrSCR->pGap->pOrgGap->iEndPos - 1;
+                    //iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    iLen = (itr+1)->pOrgGap->iStartPos - itr->pOrgGap->iEndPos - 1;
+                    iStartPos = itr->pOrgGap->iEndPos+1;
                 }
                 else // the last one then
                 {
-                    iLen = stScaffoldUnit.strSeq.length() - itrSCR->pGap->pOrgGap->iEndPos - 1;
-                    iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    //iLen = stScaffoldUnit.strSeq.length() - itrSCR->pGap->pOrgGap->iEndPos - 1;
+                    //iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    iLen = stScaffoldUnit.strSeq.length() - itr->pOrgGap->iEndPos - 1;
+                    iStartPos = itr->pOrgGap->iEndPos+1;
                 }
                 stFinalScaffoldUnit.strFillByNorm += stScaffoldUnit.strSeq.substr(iStartPos, iLen);
                 stFinalScaffoldUnit.strFillByRevComp += stScaffoldUnit.strSeq.substr(iStartPos, iLen);
                 break;
-            }
-        }
+         //   }
+       // }
     }
     //Step2: Get Map Read Back to Refined Scaffold to check the coverage in gao area
     //1: Clear the folder rm -rf path/*  do not needed, since this function has been added into bam file creation

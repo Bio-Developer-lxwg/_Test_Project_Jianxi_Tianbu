@@ -8,8 +8,11 @@
 #include <algorithm>
 #include "needleman_wunsch.h"
 #include <dirent.h>
+#include <iostream>
+#include <fstream>
 
 #define MAXBUFSIZE 260
+using namespace std;
 
 string ClsAlgorithm::GetCurExePath()
 {
@@ -37,7 +40,7 @@ string ClsAlgorithm::GetHigherFolderPath(string strCurPath, int iLevel)
 {
     vector<int> vLevel;
     int iPos = 0;
-    while((iPos = (int)strCurPath.find('/', iPos)) != string::npos)
+    while((iPos = strCurPath.find('/', iPos)) != string::npos)
     {        
         vLevel.push_back(iPos);
         iPos += 1;
@@ -193,6 +196,146 @@ int ClsAlgorithm::CheckInterSection(int iStart1, int iEnd1, int iStart2, int iEn
         }
     }
     return 0;
+}
+
+string ClsAlgorithm::CreateBamFile(string& strFaName, string& strRefSeq,
+                                   string& strReads1Path, string& strReads2Path)
+{
+    cout << "Create Bam File" << endl;
+    //1: Save such scaffold as the reference file
+    //Get the exe path and the the fill path  for testing   ==>Try to seach internet!!!!
+    string strRootPath = ClsAlgorithm::GetInstance().GetHigherFolderPath(get_current_dir_name());
+    strRootPath += "TempFile/";
+    //Clear the files under this folder
+    string strCmd = "";//"rm -rf " + strRootPath + "*";
+    //system(strCmd.c_str());
+    //Set the valuefor Reference Fasta file
+    string strRefPath = strRootPath + strFaName + ".fa";
+
+    ofstream ofs;
+    ofs.open(strRefPath.c_str());
+    ofs << ">" << strFaName << endl;
+    ofs << strRefSeq;
+    ofs.close();
+
+    //2: Build Index for this Reference Fa File
+    strCmd = "bwa index -a bwtsw " + strRefPath;
+    system(strCmd.c_str());
+
+    //3: Alignment-->Build SAI
+    //string strRead1Path = m_strReads1Path//strRootPath + "read1.fq";
+    //string strRead2Path = strRootPath + "read2.fq";
+    string strSai1Path = strRootPath + "read1.sai";
+    strCmd = "bwa aln -1 " + strRefPath + " " + strReads1Path + " > " + strSai1Path; //Read 1
+    system(strCmd.c_str());
+    string strSai2Path = strRootPath + "read2.sai";
+    strCmd = "bwa aln -2 " + strRefPath + " " + strReads2Path + " > " + strSai2Path; //Read 2
+    system(strCmd.c_str());
+
+    //4: Generate SAM file
+    string strSamPath = strRootPath + "Read.sam";
+    strCmd = "bwa sample -f " + strSamPath + " " +
+             strRefPath + " " + strSai1Path + " " + strSai2Path + " " +
+             strReads1Path + " " + strReads2Path;
+    system(strCmd.c_str());
+
+    //5: transfer sam to bam
+    string strBamPath = strRootPath + "Read.bam";
+    strCmd = "samtools view -bS " + strSamPath + " > " + strBamPath;
+    system(strCmd.c_str());
+
+    //6: Sort bam file
+    string strSortedBamPath = strRootPath + "Read.sorted.bam";
+    strCmd = "bamtools sort -in " +
+            strBamPath + " -out " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //7:build index file for bam file
+    strCmd = "bamtools index -in " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    return strSortedBamPath;
+}
+
+string ClsAlgorithm::CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffoldUnit,
+                                               string& strReads1Path, string& strReads2Path,
+                                               string strBamFileName, En_ScaffoldDataType enDataType)
+{
+    cout << "Create Bam File" << endl;
+    //1: Save such scaffold as the reference file
+    //Get the exe path and the the fill path  for testing   ==>Try to seach internet!!!!
+    string strRootPath = ClsAlgorithm::GetInstance().GetHigherFolderPath(get_current_dir_name());
+    strRootPath += "TempFile/";
+    //Clear the files under this folder
+    string strCmd = "";//"rm -rf " + strRootPath + "*";
+    //system(strCmd.c_str());
+    //Set the valuefor Reference Fasta file
+    string strFaName = "ScaffoldSet";
+    string strRefPath = strRootPath + strFaName + ".fa";
+
+    ofstream ofs;
+    ofs.open(strRefPath.c_str());
+    for(vector<St_ScaffoldUnit>::iterator itr = vScaffoldUnit.begin(); itr != vScaffoldUnit.end(); itr++)
+    {
+        ofs << ">" << itr->strName << endl;
+        switch((int)enDataType)
+        {
+            case sdtNormal:
+                ofs << itr->strSeq << endl;
+                break;
+            case sdtByRepeat:
+            case sdtByDraftGene:
+                ofs << itr->strRefinedSeq << endl;
+                break;
+        }
+    }
+    ofs.close();
+
+    //2: Build Index for this Reference Fa File
+    strCmd = "bwa index -a bwtsw " + strRefPath;
+    system(strCmd.c_str());
+
+    //3: Alignment-->Build SAI
+    //string strRead1Path = m_strReads1Path//strRootPath + "read1.fq";
+    //string strRead2Path = strRootPath + "read2.fq";
+    /*string strSai1Path = strRootPath + "read1.sai";
+    strCmd = "bwa aln -1 " + strRefPath + " " + strReads1Path + " > " + strSai1Path; //Read 1
+    system(strCmd.c_str());
+    string strSai2Path = strRootPath + "read2.sai";
+    strCmd = "bwa aln -2 " + strRefPath + " " + strReads2Path + " > " + strSai2Path; //Read 2
+    system(strCmd.c_str());*/
+
+    //4: Generate SAM file
+    string strSamPath = strRootPath + (strBamFileName == "" ? "Read.sam" : (strBamFileName + ".sam"));
+    strCmd = "bwa mem " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    system(strCmd.c_str());
+
+    //5: transfer sam to bam
+    string strBamPath = strRootPath + (strBamFileName == "" ? "Read.bam" : (strBamFileName + ".bam"));
+    strCmd = "samtools view -bS " + strSamPath + " > " + strBamPath;
+    system(strCmd.c_str());
+
+    //6: Sort bam file
+    string strSortedBamPath = strRootPath +
+                              (strBamFileName == "" ? "Read.sorted.bam" :
+                                                      (strBamFileName + ".sorted.bam"));
+    strCmd = "bamtools sort -in " +
+            strBamPath + " -out " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //7:build index file for bam file
+    strCmd = "bamtools index -in " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //8: delete the bamfile and samfile since they are too large to be stored
+    //a) Delete Sam File
+    strCmd = "rm -f " + strSamPath;
+    system(strCmd.c_str());
+    //b) Delete Bam File
+    strCmd = "rm -f " + strBamPath;
+    system(strCmd.c_str());
+
+    return strSortedBamPath;
 }
 
 

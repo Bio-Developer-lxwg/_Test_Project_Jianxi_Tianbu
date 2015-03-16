@@ -37,17 +37,23 @@ struct St_Gap
     int iReptStart; //in repeat (if is could be fill in repeat)
     int iReptEnd;
 
+    //评估之后的长度
+    int iEstimateLen;
+    bool bAbnormalLarge;
+
     bool CouldFill();
     void RefinedByN(string& strOrg, string& strDest);
     St_Gap():iStartPos(-1), iEndPos(-1), iLen(-1), fRatioTolerent(0.3), iKmerLen(10),
              strFillSeq(""), bFilled(false), enLFMatchType(mtNone), enRFMatchType(mtNone),
-             enGapType(gtNone), iReptStart(-1), iReptEnd(-1)
+             enGapType(gtNone), iReptStart(-1), iReptEnd(-1), iEstimateLen(-1), bAbnormalLarge(false)
     {}
 };
 
 struct St_BamGap: St_Gap  //Design for the gap of bam file (after refined by repeats )
 {
     string strRevCompFillSeq;
+    string strLeftExt;
+    string strRightExt;
 };
 ////////////////////////////////////////////////////////////////////////
 
@@ -96,14 +102,18 @@ struct St_GapRefinedByRept
     }
 };
 
+enum En_ScaffoldQuality {sqNone=0, sqLow, sqNorm, sqHigh, sqMax};
 struct St_ScaffoldUnit
 {
     string strName;
     string strSeq;
+    int iID; //Used for Bam File parsing
     vector<St_Gap> vGap; //Record Gap Start and End
 
     string strRefinedSeq;
     vector<St_GapRefinedByRept> vGapRefinedByRept;
+
+    En_ScaffoldQuality enQuality;
 
     void FindGaps();
     void InitKmerInfoForOneGap(St_Gap& stGap, string& strRefSeq, int iMaxReptLen);
@@ -113,6 +123,11 @@ struct St_ScaffoldUnit
     {
         return nt == 'N' || nt == 'n';
     }
+    //calc quality-->
+    void UpdateQuality(int iMatechedReads, int iSoftClipReads);
+    //<--
+    St_ScaffoldUnit():iID(-1000), enQuality(sqNone)
+    {}
 };
 
 struct St_ScaffoldFile
@@ -134,8 +149,8 @@ struct St_ScaffoldFile
 enum En_ClipPart {cpLeft, cpRight, cpNone, cpMax};
 struct St_SoftClipReads
 {
-    string strSeq;
-    string strClipSeq;
+    string strSeq; // Aligned Part
+    string strClipSeq; // cliped part
 
     int iClipStart;
     int iClipLen;
@@ -157,29 +172,17 @@ struct St_SoftClipReads
 
     St_SoftClipReads():enClipPart(cpNone),  bRevsStrand(false),  bSecondMate(false),
                        iMissingStart(-1), iMissingEnd(-1), iAlignLeft(-1), iAlignRight(-1), pGap(NULL)
-    {}
+    {}    
 };
 
 /*
-struct St_FillResultBySCReads
-{
-    St_GapRefinedByRept* pGap;
-    string strFillSeq;
-    string strRevCompFillSeq;
-    St_FillResultBySCReads(St_GapRefinedByRept* pGapValue, string strFillSeqValue, string strRevCompFillSeqValue)
-    {
-        pGap = pGapValue;
-        strFillSeq = strFillSeqValue;
-        strRevCompFillSeq = strRevCompFillSeqValue;
-    }
-};*/
-
 struct St_BamFile
 {
     vector<St_SoftClipReads> vSCReads; //soft clip reads --> they are very useful!!!
     //vector<St_FillResultBySCReads> vSCResult;
     //vector<St_GapRefinedByRept*> vpGapAfterRept; //The Gap after the phase of repeats filling
-};
+};*/
+
 //////////////////////////////////////////////////////////////////////////
 
 /* The structure which used to record and express the final result
@@ -209,5 +212,35 @@ struct St_FinalScaffoldUnit
     vector<St_FillUnit> vFinalFillGapRecord;
 };
 ///////////////////////////////////////////////////////////////////////////
+/// \brief The St_GapReads struct
+struct St_NoneMap
+{
+    int iMatPos;
+    St_NoneMap():iMatPos(-1)
+    {}
+    St_NoneMap(int iMatPosValue)
+    {
+        iMatPos = iMatPosValue;
+    }
+};
+
+struct St_GapReads
+{
+    vector<St_SoftClipReads> vRightClip;
+    vector<St_SoftClipReads> vLeftClip;
+    //vector<St_NoneMap> vNoneMap;
+    int iLength;
+    bool bAbnormalLarge;
+    St_GapReads():iLength(0),bAbnormalLarge(false)
+    {}
+};
+
+struct St_GapAlnSet //This could be considered as one scaffold
+{
+    vector<St_GapReads> vGapReadsSet;
+    //bool bAddNoneMap;
+    St_GapAlnSet()//:bAddNoneMap(false)
+    {}
+};
 
 #endif // CLSCORESTRUCTURE_H

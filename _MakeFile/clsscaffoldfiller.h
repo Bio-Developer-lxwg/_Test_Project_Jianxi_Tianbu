@@ -39,7 +39,7 @@ public:
     void UpdateBamReads(BamAlignment& al, St_ScaffoldUnit& stScaffoldUnit,
                         int icurClipLen, int icurClipPos, int iRefPos);
     void FillGapBySoftClipReads();
-    void AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& stGapRefinedByRept,
+    void AddValidSCReads(BamAlignment& al, St_GapRefinedByRept& stGapRefinedByRept,
                           int icurClipLen, int icurClipPos, int iRefPos);
     string CombineExt(string strExt1, string strExt2/*, int iStart1, int iStart2, int iEnd1, int iEnd2*/);   
 
@@ -55,7 +55,7 @@ private:
     FastaParser* m_pFastaParse;
     St_RepeatFile m_stRepeat;
     St_ScaffoldFile m_stScaffold;
-    St_BamReads m_stBamReads; //Just collect the valid bam reads
+    St_BamFile m_stBamFile; //Just collect the valid bam reads
     vector<St_FinalScaffoldUnit> m_vFinalResult; // the final result
 };
 

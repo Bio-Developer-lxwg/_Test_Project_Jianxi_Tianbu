@@ -1,5 +1,6 @@
-#include "clscorestructure.h"
+//#include "clscorestructure.h"
 #include "clsalgorithm.h"
+#include <algorithm>
 /*
  * The very basical structure of gap filling: it defines what the gap it is.
  */
@@ -270,20 +271,71 @@ void St_ScaffoldUnit::UpdateRefinedSeqByRepeats()
     //<---
 }
 
+//用于更新该scaffold的质量，通过考虑能够成功match到其上面的reads，以及成功产生的softcip的reads的数目，如果过少，很显然质量就不应该很高
+//通过strRefinedSeq进行quality的判定
+//这里一定要注意：实际上两边的softclip占的比例还挺大的
+void St_ScaffoldUnit::UpdateQuality(int iMatechedReads, int iSoftClipReads)
+{
+    if(strRefinedSeq == "")
+        return;
+    int iN = 0;
+    int iLastValidPos = 0;
+    int iNPos = -1;
+    while((iNPos = strRefinedSeq.find('N', iLastValidPos)) != (int)string::npos)
+    {
+        iN++;
+        iLastValidPos = iNPos + 1;
+    }
+    int iValidChar = strRefinedSeq.length() - iN;
+    float fBound1AnyMatch = iValidChar * .5;
+    float fBound2AnyMatch = iValidChar * .25;
+    // 50 意味着首位总公产生50个soft clip,然后我们考虑到整体的有效的字符数，然后取较小的那个值
+    float fBoundPartMatch = (iSoftClipReads > 200 ? 200 : iSoftClipReads) * .5 +
+                            50 > (iValidChar/4) ? (iValidChar/4) : 50;
+    if(iMatechedReads >= fBound1AnyMatch)
+    {
+        if(iSoftClipReads > fBoundPartMatch)
+            enQuality = sqHigh;
+        else
+            enQuality = sqNorm;
+    }
+    else if(iMatechedReads >= fBound2AnyMatch)
+    {
+        if(iSoftClipReads > fBoundPartMatch)
+            enQuality = sqNorm;
+        else
+            enQuality = sqLow;
+    }
+    else
+        enQuality = sqLow;
+}
+
 //////////////////////////St_ScaffoldFile/////////////////////////////////////////////////
 void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMaxRepLen)
 {
     vector<St_Fasta> vFastaData;
     pFastaParse->ReadFasta(strFilePath, vFastaData);
     //Transfer vData to vector<St_ScaffoldUnit>
-    unsigned int iDataNum = vFastaData.size();
+    //首先需要预估计相应的长度
+    unsigned int iDataNum = 0;
+    for(vector<St_Fasta>::iterator itrFasta = vFastaData.begin();
+        itrFasta != vFastaData.end(); itrFasta++)
+    {
+        if(itrFasta->strName.find("scaffold") == string::npos) // 在名字里面没有scaffold,证明不是scaffold
+            break;
+        else
+            iDataNum++;
+    }
     cout << IntToStr(iDataNum) << endl;
     vData.resize(iDataNum);
     vector<St_Fasta>::iterator itrFasta = vFastaData.begin();
     int iIndex = 0;
+    //Set value to each scaffold unit
     for(vector<St_ScaffoldUnit>::iterator itr = vData.begin();
         itr != vData.end() && itrFasta != vFastaData.end(); itr++, itrFasta++)
     {
+        if(itrFasta->strName.find("scaffold") == string::npos) // 在名字里面没有scaffold,证明不是scaffold
+            break;
         if(itrFasta->strName.find(' ') == string::npos) // discard the name after ' '
             itr->strName = itrFasta->strName;
         else
@@ -293,6 +345,7 @@ void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMa
         }
 
         itr->strSeq = itrFasta->strSeq;
+        itr->iID = iIndex;
         itr->FindGaps();
         //-->InitKmerInfoForEachGap
         for(vector<St_Gap>::iterator itrGap = itr->vGap.begin();
@@ -301,10 +354,10 @@ void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMa
             itr->InitKmerInfoForOneGap(*itrGap, itr->strSeq, iMaxRepLen);
         }
         //<--
-        cout << IntToStr(iIndex) << "//" << IntToStr(iDataNum) << endl;
+        cout << IntToStr(iIndex) << "/" << IntToStr(iDataNum) << endl;
         iIndex++;
-        if(iIndex > 1000) // 为了测试青蛙的真实数据，防治被kill做的临时性代码
-            break;
+        //if(iIndex > 5000) // 为了测试青蛙的真实数据，防治被kill做的临时性代码
+        //   break;
     }
 }
 //<--------

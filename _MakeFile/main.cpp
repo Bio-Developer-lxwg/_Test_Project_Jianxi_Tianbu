@@ -43,8 +43,10 @@ int main(int argc, char **argv)
 void GapFilling(char **argv)
 {
     ClsScaffoldFiller* pScaffoldFiller = new ClsScaffoldFiller();
+    //Init the data by the input files
     cout << "Start Init" <<endl;
     pScaffoldFiller->Init(argv);
+    //Start Scaffold
     cout << "Init Finished" << endl;
     pScaffoldFiller->FillScaffold();
 

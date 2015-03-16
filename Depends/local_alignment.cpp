@@ -820,7 +820,7 @@ AlnAln *aln_stdaln_aux(const char *seq1, const char *seq2, const AlnParam *ap,
 	aa->end2 = aa->path->j;
 	aa->cigar32 = aln_path2cigar32(aa->path, aa->path_len, &aa->n_cigar);
 
-	return aa;
+    return aa;
 }
 
 AlnAln *aln_stdaln(const char *seq1, const char *seq2, const AlnParam *ap, int type, int thres)
@@ -1045,6 +1045,21 @@ void LocalAlignment::optAlign(std::string& sref, std::string& ssgmt, int& optm_s
 	aln_free_AlnAln(aln_local);
 }
 
+void LocalAlignment::optAlignEx(std::string& sref, std::string& ssgmt, int& optm_start_ref, int& optm_end_ref,
+                                int& optm_start_sgmt, int& optm_end_sgmt, int& iScore, std::string& strAlnSymbol)
+{
+    AlnAln *aln_local;
+
+    aln_local  = aln_stdaln(sref.c_str(), ssgmt.c_str(), &aln_param_blast, 0, 1);
+    optm_start_ref = aln_local->start1;
+    optm_end_ref = aln_local->end1;
+    optm_start_sgmt = aln_local->start2;
+    optm_end_sgmt = aln_local->end2;
+    iScore = aln_local->score;
+    strAlnSymbol = aln_local->outm;
+    aln_free_AlnAln(aln_local);
+}
+
 /*
 Return the optimal alignment, also return left part and right part second-optimal alignment.
 */
@@ -1129,13 +1144,3 @@ void LocalAlignment::optAlignWithRestSecondOpt(std::string& sref, std::string& s
 
 	aln_free_AlnAln(aln_local);
 }
-
-//void LocalAlignment::setRef(std::string sref)
-//{
-//	this->sref=sref;
-//}
-//
-//void LocalAlignment::setSgmt(std::string ssgmt)
-//{
-//	this->ssgmt=ssgmt;
-//}

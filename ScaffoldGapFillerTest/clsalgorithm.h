@@ -1,7 +1,10 @@
 #ifndef CLSALGORITHM_H
 #define CLSALGORITHM_H
 #include <string>
+#include "clscorestructure.h"
 using namespace std;
+
+enum En_ScaffoldDataType{sdtNormal, sdtByRepeat, sdtByDraftGene, stdMax};
 
 class ClsAlgorithm
 {
@@ -29,6 +32,12 @@ public:
     void GlobalAlignment(char* seq_a, char* seq_b);
     //Set
     int CheckInterSection(int iStart1, int iEnd1, int iStart2, int iEnd2);
+    //Bam File
+    string CreateBamFile(string& strFaName, string& strRefSeq,
+                         string& strReads1Path, string& strReads2Path);
+    string CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffoldUnit,
+                                     string& strReads1Path, string& strReads2Path,                                     
+                                     string strBamFileName = "", En_ScaffoldDataType enDataType = sdtNormal);
 };
 
 #endif // CLSALGORITHM_H

@@ -12,7 +12,9 @@ public:
 
 public:
 	void optAlign(std::string& sref, std::string& ssgmt, int& optm_start_ref, int& optm_end_ref, int& optm_start_sgmt, int& optm_end_sgmt);
-    //void optAlignEx(std::string& sref, std::string& ssgmt, AlnAln& stAln); //add by lxwg to get more parameters
+    void optAlignEx(std::string& sref, std::string& ssgmt, int& optm_start_ref, int& optm_end_ref,
+                    int& optm_start_sgmt, int& optm_end_sgmt,
+                    int& iScore, std::string& strAlnSymbol); //add by lxwg to get more parameters
 
 	void align(std::string& sref, std::string& ssgmt, int& optm_start_ref, int& optm_end_ref, int& optm_start_sgmt, int& optm_end_sgmt, \
 	           int& start_ref1, int& end_ref1, int& start_sgmt1, int& end_sgmt1,                 \

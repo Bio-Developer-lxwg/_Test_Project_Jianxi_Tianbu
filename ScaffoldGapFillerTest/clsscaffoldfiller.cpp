@@ -9,325 +9,6 @@
 #include "api/BamMultiReader.h"
 #include "api/BamWriter.h"
 
-/////////////////St_Gap///////////////////
-bool St_Gap::CouldFill()
-{
-    if(iLen < 10)
-        return false;
-    else
-        return true;
-}
-
-void St_Gap::RefinedByN(string& strOrg, string& strDest)
-{
-    if(strOrg.find('N', 0) == string::npos)
-    {
-        strDest = strOrg;
-        return;
-    }
-    strDest = "";
-    int iNPos = -1;
-    int iNNum = 0;
-    int iLastValidPos = 0;
-    while( (iNPos = strOrg.find('N', iLastValidPos)) != (int)string::npos)
-    {
-        iNNum = 1;
-        for(int i = iNPos + 1; i<strOrg.length(); i++)
-        {
-            if(strOrg.at(i) == 'N')
-                iNNum++;
-            else
-                break;
-        }
-        if(iNNum < 10)
-            strDest += strOrg.substr(iLastValidPos, (iNPos - iLastValidPos));
-        else
-            strDest = "";
-        iLastValidPos = iNPos + iNNum;
-    }
-    // add the last part
-    if(iLastValidPos < strOrg.length())
-        strDest += strOrg.substr(iLastValidPos, strOrg.length() - iLastValidPos + 1);
-}
-////////////////////////////St_RepeatFile/////////////////////////////////////////////
-//-------->The function of Structure
-void St_RepeatFile::Init(string strFilePath, FastaParser* pFastaParse)
-{
-    vector<St_Fasta> vFastaData;
-    pFastaParse->ReadFasta(strFilePath, vFastaData);
-    //Init Repeat -->
-    vData.resize(vFastaData.size());
-    vector<St_Fasta>::iterator itrFasta = vFastaData.begin();
-    for(vector<St_RepeatUnit>::iterator itr = vData.begin();
-        itr != vData.end() && itrFasta != vFastaData.end(); itr++, itrFasta++)
-    {
-        itr->strName = itrFasta->strName;
-        itr->strNormalSeq = itrFasta->strSeq;
-        //--->Calculate the relevant Kmer-->
-        int iKmerNum = itr->strNormalSeq.length() - itr->iKmerLen + 1;
-        if(iKmerNum <= 0)
-            continue;
-        itr->vNormalKmerValue.resize(iKmerNum);
-        int iKmerPosStart = 0;
-        for(vector<KmerTypeShort>::iterator itrKmer = itr->vNormalKmerValue.begin();
-            itrKmer != itr->vNormalKmerValue.end(); itrKmer++)
-        {
-            FormKmerTypeShortSeg(itr->strNormalSeq.c_str(), iKmerPosStart, itr->iKmerLen, *itrKmer);
-            iKmerPosStart++;
-        }
-        //<---
-
-        itr->strCompleRevSeq = pFastaParse->GetRevCompleString(itr->strNormalSeq);
-        //--->Calculate the relevant Kmer-->
-        iKmerNum = itr->strCompleRevSeq.length() - itr->iKmerLen + 1;
-        if(iKmerNum <= 0)
-            continue;
-        itr->vCompleRevKmerValue.resize(iKmerNum);
-        iKmerPosStart = 0;
-        for(vector<KmerTypeShort>::iterator itrKmer = itr->vCompleRevKmerValue.begin();
-            itrKmer != itr->vCompleRevKmerValue.end(); itrKmer++)
-        {
-            FormKmerTypeShortSeg(itr->strCompleRevSeq.c_str(), iKmerPosStart, itr->iKmerLen, *itrKmer);
-            iKmerPosStart++;
-        }
-        //<---
-
-    }
-}
-
-unsigned int St_RepeatFile::GetMaxLen()
-{
-    if(vData.empty())
-        return 0;
-
-    unsigned int iMaxLen = 0;
-    for(vector<St_RepeatUnit>::iterator itr = vData.begin(); itr != vData.end(); itr++)
-    {
-        if(iMaxLen < itr->strNormalSeq.length())
-            iMaxLen = itr->strNormalSeq.length();
-    }
-    return iMaxLen;
-}
-
-//////////////////////////St_ScaffoldUnit/////////////////////////////////////////////////
-
-void St_ScaffoldUnit::FindGaps()
-{
-    if("" == strSeq)
-        return;
-    vGap.clear();
-    St_Gap stGap;
-    for(unsigned int i=0; i<strSeq.length(); i++)
-    {
-        //
-        if(IsMissing(strSeq.at(i) ))
-        {
-            // this is a gap
-            stGap.iStartPos = i;
-            while(IsMissing(strSeq.at(i) ) && i < strSeq.length())
-            {
-                i++;
-            }
-            stGap.iEndPos = i-1;
-            stGap.iLen = stGap.iEndPos - stGap.iStartPos + 1;
-            vGap.push_back(stGap);
-        }
-    }
-}
-
-void St_ScaffoldUnit::RefineFlank(St_Gap& stCurGap)
-{
-    //Consider the N, and the influence from other gaps
-    //1:Refined by other gap -->We do not need to consider this case, since the following
-    //logic will never cause this problem
-
-    //2: Refine left flank
-    stCurGap.RefinedByN(stCurGap.strLeftFlank, stCurGap.strRefinedLeftFlank);
-    //3: Refine right flank
-    stCurGap.RefinedByN(stCurGap.strRightFlank, stCurGap.strRefinedRightFlank);
-}
-
-void St_ScaffoldUnit::InitKmerInfoForOneGap(St_Gap& stGap, string& strRefSeq, int iMaxReptLen)
-{
-    //we need to set value for the following variantns
-    //思路：我们按着MaxLen的方向去找，然后以发现其中有N作为中断的条件
-    int iMaxLen = iMaxReptLen * stGap.fRatioTolerent;
-    //Step 1:Find the strLeftValidSeq -->我们先找左边的
-    int iLeftFlankStart = stGap.iStartPos - iMaxLen;
-    int iLeftFlankLen = iMaxLen;
-    if(iLeftFlankStart < 0)
-    {
-        iLeftFlankStart = 0;
-        iLeftFlankLen = stGap.iStartPos;
-    }
-    stGap.strLeftFlank = strRefSeq.substr(iLeftFlankStart, iLeftFlankLen);
-    stGap.iLeftFlankStart = iLeftFlankStart;
-
-    //Step 2:Find the strRightValidSeq -->我们再找右边的
-    int iRightFlankLen = iMaxLen;
-    int iRightFlankEnd = stGap.iEndPos + iMaxLen;
-    if(iRightFlankEnd >= (int)strRefSeq.length())
-    {
-        iRightFlankLen = strRefSeq.length() - stGap.iEndPos;
-    }
-    if(iRightFlankLen <= 0)
-    {
-        stGap.strRightFlank = "";
-        stGap.iRightFlankEnd = stGap.iEndPos;
-    }
-    else
-    {
-        strRefSeq.substr(stGap.iEndPos+1, iRightFlankLen);
-        stGap.iRightFlankEnd = stGap.iEndPos + iRightFlankLen;
-    }
-
-    //Step 3: Refine both left and right flank
-    RefineFlank(stGap);
-
-    //Step 4: 计算左边的kmer值
-    if(stGap.strRefinedLeftFlank != "")
-    {
-        int iKmerNum = stGap.strRefinedLeftFlank.length() - stGap.iKmerLen + 1;
-        stGap.vLeftKmer.resize(iKmerNum);
-        int iKmerPosStart = 0;
-        for(vector<KmerTypeShort>::iterator itrKmer = stGap.vLeftKmer.begin();
-            itrKmer != stGap.vLeftKmer.end(); itrKmer++)
-        {
-            FormKmerTypeShortSeg(stGap.strRefinedLeftFlank.c_str(), iKmerPosStart, stGap.iKmerLen, *itrKmer);
-            iKmerPosStart++;
-        }
-    }
-    //step 5: 计算右边的kmer值
-    if(stGap.strRefinedRightFlank != "")
-    {
-        int iKmerNum = stGap.strRefinedRightFlank.length() - stGap.iKmerLen + 1;
-        stGap.vRightKmer.resize(iKmerNum);
-        int iKmerPosStart = 0;
-        for(vector<KmerTypeShort>::iterator itrKmer = stGap.vRightKmer.begin();
-            itrKmer != stGap.vRightKmer.end(); itrKmer++)
-        {
-            FormKmerTypeShortSeg(stGap.strRefinedRightFlank.c_str(), iKmerPosStart, stGap.iKmerLen, *itrKmer);
-            iKmerPosStart++;
-        }
-     }
-}
-
-void St_ScaffoldUnit::UpdateRefinedSeqByRepeats()
-{
-    strRefinedSeq = "";
-    vGapRefinedByRept.clear();
-    St_GapRefinedByRept stNewGap;
-    if(vGap.empty())
-    {
-        strRefinedSeq = strSeq;
-        return;
-    }
-    //1: Append the seq before the first gap
-    strRefinedSeq += strSeq.substr(0, vGap[0].iStartPos);
-    //2: Update the sequence by Gap
-    const char* cGAPSYMBOL = "NNNNNNNNNNNNNNNNNNNN"; //20Ns
-    for(vector<St_Gap>::iterator itrGap = vGap.begin(); itrGap != vGap.end(); itrGap++)
-    {
-        if(itrGap != vGap.begin())
-        {
-            //add the valid sequence between current and the last gap into refined seq
-            strRefinedSeq += strSeq.substr((itrGap-1)->iEndPos + 1, (itrGap->iStartPos - (itrGap-1)->iEndPos - 1));
-        }
-        if(itrGap->bFilled) //1: if such gap has been fixed
-        {
-            strRefinedSeq += itrGap->strFillSeq;
-            stNewGap.stGap.iStartPos = strRefinedSeq.length();
-            strRefinedSeq += cGAPSYMBOL;
-            stNewGap.stGap.iEndPos = strRefinedSeq.length() - 1;
-            stNewGap.stGap.iLen = string(cGAPSYMBOL).length();
-            stNewGap.pOrgGap = &(*itrGap);
-        }
-        else //Do not fix by repeat
-        {
-            stNewGap.stGap.iStartPos = strRefinedSeq.length();
-            for(int i=0; i<itrGap->iLen; i++)
-            {
-                strRefinedSeq += "N";
-            }
-            stNewGap.stGap.iEndPos = strRefinedSeq.length() - 1;
-            stNewGap.stGap.iLen = itrGap->iLen;
-            stNewGap.pOrgGap = &(*itrGap);
-        }
-        vGapRefinedByRept.push_back(stNewGap); // now, we have collected the either refined and unrefined gap
-    }       
-    //3: Append the valid seq after the last gap
-    unsigned int iLastIndex = vGap.size() - 1;
-    strRefinedSeq += strSeq.substr(vGap[iLastIndex].iEndPos + 1, strSeq.length() - vGap[iLastIndex].iEndPos);
-
-    //4: Since the string do not build over, we need to calculate the relevant kmer in the here (the last step)
-    //--->We need to calculate the new kmer
-    for(vector<St_GapRefinedByRept>::iterator itr = vGapRefinedByRept.begin();
-        itr != vGapRefinedByRept.end(); itr++)
-    {
-        InitKmerInfoForOneGap(itr->stGap, strRefinedSeq, 100); // in face we just conside the 30 characters: 1 kmer will be very good
-    }
-    //<---
-}
-
-//////////////////////////St_ScaffoldFile/////////////////////////////////////////////////
-
-void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMaxRepLen)
-{
-    vector<St_Fasta> vFastaData;
-    pFastaParse->ReadFasta(strFilePath, vFastaData);
-    //Transfer vData to vector<St_ScaffoldUnit>
-    unsigned int iDataNum = vFastaData.size();
-    cout << IntToStr(iDataNum) << endl;
-    vData.resize(iDataNum);
-    vector<St_Fasta>::iterator itrFasta = vFastaData.begin();
-    int iIndex = 0;
-    for(vector<St_ScaffoldUnit>::iterator itr = vData.begin();
-        itr != vData.end() && itrFasta != vFastaData.end(); itr++, itrFasta++)
-    {       
-        if(itrFasta->strName.find(' ') == string::npos) // discard the name after ' '
-            itr->strName = itrFasta->strName;
-        else
-        {
-            int iValidLen = itrFasta->strName.find(' ');
-            itr->strName = itrFasta->strName.substr(0, iValidLen);
-        }
-
-        if(iIndex == 91748)
-        {
-            cout << itr->strName << endl;
-        }
-
-        itr->strSeq = itrFasta->strSeq;
-        if(iIndex == 91748)
-        {
-            cout << "Start Find Gap" << endl;
-        }
-        itr->FindGaps();
-        if(iIndex == 91748)
-        {
-            cout << "End Find Gap" << endl;
-        }
-        //-->InitKmerInfoForEachGap
-        if(iIndex == 91748)
-        {
-            cout << "Start InitKmerInfo" << endl;
-        }
-        for(vector<St_Gap>::iterator itrGap = itr->vGap.begin();
-            itrGap != itr->vGap.end(); itrGap++)
-        {
-            itr->InitKmerInfoForOneGap(*itrGap, itr->strSeq, iMaxRepLen);
-        }
-        if(iIndex == 91748)
-        {
-            cout << "End Init KmerInfo" << endl;
-        }
-        //<--
-        cout << IntToStr(iIndex) << "//" << IntToStr(iDataNum) << endl;
-        iIndex++;
-    }
-}
-//<--------
-
 ClsScaffoldFiller::ClsScaffoldFiller(): m_pFastaParse(NULL)
 {
 }
@@ -341,14 +22,20 @@ ClsScaffoldFiller::~ClsScaffoldFiller()
     }
 }
 
-void ClsScaffoldFiller::Init(string strRepeatFilePath, string strScaffoldPath)
+void ClsScaffoldFiller::Init(char **argv)
 {
-    m_pFastaParse = new FastaParser();
-    cout << "Start to init m_stRepeats" << endl;
-    m_stRepeat.Init(strRepeatFilePath, m_pFastaParse);
-    cout << "m_stRepeats init finished" << endl;
-    cout << "Start to init m_stScaffold" << endl;
-    m_stScaffold.Init(strScaffoldPath, m_pFastaParse, m_stRepeat.GetMaxLen());
+    if(m_pFastaParse == NULL)
+    {
+        m_pFastaParse = new FastaParser();
+    }
+    //Parameter 1: Repeat File
+    //Parameter 2: scaffoldFile
+    //Parameter 3: reads1
+    //Parameter 4: reads2
+    m_stRepeat.Init(argv[1], m_pFastaParse); //Init Repeat File
+    m_stScaffold.Init(argv[2], m_pFastaParse, m_stRepeat.GetMaxLen()); //Init Scaffold File
+    m_strReads1Path = argv[3]; //Set Reads1
+    m_strReads2Path = argv[4]; //Set Reads2
     cout << "m_stScaffold Init finished" << endl;
 }
 
@@ -357,10 +44,15 @@ void ClsScaffoldFiller::FillScaffold()
     if(m_stScaffold.vData.empty())
         return;
     m_vFinalResult.clear();
-    //move the file
+    //move the file -->Which record the result of gap filling
     string strResultPath = ClsAlgorithm::GetInstance().GetCurExeFolderPath() + "/GapFillerInfo";
     ::remove(strResultPath.c_str());
-    //
+    //move all of files in temperary folder
+    string strCmd = "exec rm -r " +
+                    ClsAlgorithm::GetInstance().GetHigherFolderPath(ClsAlgorithm::GetInstance().GetCurExeFolderPath()) +
+                    "TempFile/*";
+    system(strCmd.c_str());
+
     for(vector<St_ScaffoldUnit>::iterator itr = m_stScaffold.vData.begin();
         itr != m_stScaffold.vData.end(); itr++)
     {
@@ -383,13 +75,14 @@ void ClsScaffoldFiller::FillScaffoldUnit(St_ScaffoldUnit& stScaffoldUnit)
     {
         ofs << ">" << stScaffoldUnit.strName << endl;
         int i = 0;
-        for(vector<St_FillResultBySCReads>::iterator itr = m_stBamReads.vSCResult.begin();
-            itr != m_stBamReads.vSCResult.end(); itr++)
+        for(vector<St_GapRefinedByRept>::iterator itr = stScaffoldUnit.vGapRefinedByRept.begin();
+            itr != stScaffoldUnit.vGapRefinedByRept.end(); itr++)
         {
             ofs << "Gap Index [" << IntToStr(i) << "]:" << endl;
-            ofs << "Fill by Repeats ==>" << itr->pGap->pOrgGap->strFillSeq << endl;
-            ofs << "Fill by PE Reads: Norm Ore ==> " << itr->strFillSeq << endl;
-            ofs << "Fill by PE Reads: Reverse Complementary ==> " << itr->strRevCompFillSeq << endl;
+            ofs << "Fill by Repeats ==>" << itr->pOrgGap->strFillSeq << endl;
+            ofs << "Fill by PE Reads: Norm Ore ==> " << itr->stBamGap.strFillSeq << endl;
+            ofs << "Fill by PE Reads: Reverse Complementary ==> " <<
+                   itr->stBamGap.strRevCompFillSeq << endl;
             i++;
         }
     }
@@ -449,7 +142,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
             if(*itr == *itrRep)
             {
                 bGet = true;
-                stGap.enMatchType = mtNormal;
+                stGap.enLFMatchType = mtNormal;
                 break;
             }
         }
@@ -461,7 +154,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
                 if(*itr == *itrRep)
                 {
                     bGet = true;
-                    stGap.enMatchType = mtCompleRev;
+                    stGap.enLFMatchType = mtCompleRev;
                     break;
                 }
             }
@@ -488,7 +181,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
             if(*itr == *itrRep)
             {
                 bGet = true;
-                stGap.enMatchType = mtNormal;
+                stGap.enRFMatchType = mtNormal;
                 break;
             }
         }
@@ -500,7 +193,7 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
                 if(*itr == *itrRep)
                 {
                     bGet = true;
-                    stGap.enMatchType = mtCompleRev;
+                    stGap.enRFMatchType = mtCompleRev;
                     break;
                 }
             }
@@ -527,7 +220,26 @@ bool ClsScaffoldFiller::EstimateFillGapByRepeat(St_RepeatUnit& stRepatUnit, St_G
 
 void ClsScaffoldFiller::FillGapByRepeat(St_RepeatUnit& stRepatUnit, St_Gap& stGap)
 {
-    string& strOrg = (stGap.enMatchType == mtNormal) ? stRepatUnit.strNormalSeq : stRepatUnit.strCompleRevSeq;
+    //Get the type of match:
+    En_MatchType enMatchType = mtNone;
+    if(stGap.enLFMatchType == mtNone)
+    {
+        if(stGap.enRFMatchType != mtNone)
+            enMatchType = stGap.enRFMatchType;
+    }
+    else if(stGap.enRFMatchType == mtNone)
+    {
+        if(stGap.enLFMatchType != mtNone)
+            enMatchType = stGap.enLFMatchType;
+    }
+    else // both are not none
+    {
+        if(stGap.enLFMatchType == stGap.enRFMatchType)
+            enMatchType = stGap.enLFMatchType;
+    }
+    if(enMatchType == mtNone) // 不允许左右作match后出现不一致结果的case继续进行
+        return;
+    string& strOrg = (enMatchType == mtNormal) ? stRepatUnit.strNormalSeq : stRepatUnit.strCompleRevSeq;
     //实际上Kmer感觉是用来判定是否可行的，具体怎么弄还是要用动态规划来做
     // evalaute whether the area can be filled by the passed-in repeat
     // use dynamic programming; use a simple score as follows
@@ -538,7 +250,7 @@ void ClsScaffoldFiller::FillGapByRepeat(St_RepeatUnit& stRepatUnit, St_Gap& stGa
     // define scoring scheme (simple for now)
     int iLeftFillPos = -1;
     int iRightFillPos = -1;
-    switch(stGap.enGapType)
+    switch((int)stGap.enGapType)
     {
         case gtLeft:
             iLeftFillPos = 0;
@@ -567,7 +279,7 @@ int ClsScaffoldFiller::GetPosFromLocalAlignment(string& OrgStr, string& strCmp, 
     int iStartOrg = -1, iEndOrg = -1, iStartCmp = -1, iEndCmp = -1;
     al.optAlign(OrgStr, strCmp, iStartOrg, iEndOrg, iStartCmp, iEndCmp); //如果都对上应该是那么分数就应该是整个的长度
     int iValue = -1;
-    switch(enType)
+    switch((int)enType)
     {
         case gtLeft:
             iValue = iStartOrg - 2; // start from 0 and should be use the character before such value
@@ -634,20 +346,20 @@ string ClsScaffoldFiller::CreateBamFile(string& strFaName, string& strRefSeq)
     system(strCmd.c_str());
 
     //3: Alignment-->Build SAI
-    string strRead1Path = strRootPath + "read1.fq";
-    string strRead2Path = strRootPath + "read2.fq";
+    //string strRead1Path = m_strReads1Path//strRootPath + "read1.fq";
+    //string strRead2Path = strRootPath + "read2.fq";
     string strSai1Path = strRootPath + "read1.sai";
-    strCmd = "bwa aln -1 " + strRefPath + " " + strRead1Path + " > " + strSai1Path; //Read 1
+    strCmd = "bwa aln -1 " + strRefPath + " " + m_strReads1Path + " > " + strSai1Path; //Read 1
     system(strCmd.c_str());
     string strSai2Path = strRootPath + "read2.sai";
-    strCmd = "bwa aln -2 " + strRefPath + " " + strRead2Path + " > " + strSai2Path; //Read 1
+    strCmd = "bwa aln -2 " + strRefPath + " " + m_strReads2Path + " > " + strSai2Path; //Read 2
     system(strCmd.c_str());
 
     //4: Generate SAM file
     string strSamPath = strRootPath + "Read.sam";
     strCmd = "bwa sampe -f " + strSamPath + " " +
              strRefPath + " " + strSai1Path + " " + strSai2Path + " " +
-             strRead1Path + " " + strRead2Path;
+             m_strReads1Path + " " + m_strReads2Path;
     system(strCmd.c_str());
 
     //5: transfer sam to bam
@@ -689,7 +401,7 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
     //不得不说，还是自己写靠谱！！！！！！！！！！
 
     //Step 1: Clear the old record
-    m_stBamReads.vSCReads.clear();
+    m_stBamFile.vSCReads.clear();
 
     BamReader* pBamReader = new BamReader();
     pBamReader->Open(strBamFilePath);
@@ -700,11 +412,13 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
     vector<int> clipSizes;
     vector<int> readPositions;
     vector<int> genomePositions;
+    int iPossibleGet = 0;
     while(pBamReader->GetNextAlignment(al))
     {        
         int iStart = al.Position;                
         if(iStart > 0) //这个时候应该是证明比上了
         {
+            iPossibleGet++;
             unsigned int iLastLen = clipSizes.size();
             al.GetSoftClips(clipSizes, readPositions, genomePositions);            
             if(clipSizes.size() - iLastLen > 0)
@@ -720,6 +434,7 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
             }
         }
     }
+    cout << IntToStr(iPossibleGet) << endl;
     //use those valid softclip data for gap filling ----->
     FillGapBySoftClipReads();
 
@@ -730,24 +445,23 @@ void ClsScaffoldFiller::ParseBamFileForGapFill(string strBamFilePath, St_Scaffol
 void ClsScaffoldFiller::UpdateBamReads( BamAlignment& al, St_ScaffoldUnit&  stScaffoldUnit,
                                         int icurClipLen, int icurClipPos, int iRefPos)
 {
-    bool bValidReads = false;
-
     //Step1: we should check if this this clip is valid
     const int COFFSET = 5;
     for(vector<St_GapRefinedByRept>::iterator itr = stScaffoldUnit.vGapRefinedByRept.begin();
         itr != stScaffoldUnit.vGapRefinedByRept.end(); itr++)
     {
         //use the breakpoint for confirm if such reads could be used
-        if(iRefPos-COFFSET > itr->stGap.iStartPos && iRefPos-COFFSET < itr->stGap.iEndPos ||
-           iRefPos+COFFSET > itr->stGap.iStartPos && iRefPos+COFFSET < itr->stGap.iEndPos)
+        if((iRefPos-COFFSET > itr->stBamGap.iStartPos && iRefPos-COFFSET < itr->stBamGap.iEndPos) ||
+           (iRefPos+COFFSET > itr->stBamGap.iStartPos && iRefPos+COFFSET < itr->stBamGap.iEndPos) )
         {
             //Could be used then-->
-            AddValidBamReads(al, *itr, icurClipLen, icurClipPos, iRefPos);
+            AddValidSCReads(al, *itr, icurClipLen, icurClipPos, iRefPos);
         }
     }
 }
 
-void ClsScaffoldFiller::AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& stGapRefinedByRept,
+//新增soft clip reads
+void ClsScaffoldFiller::AddValidSCReads(BamAlignment& al, St_GapRefinedByRept& stGapRefinedByRept,
                                          int icurClipLen, int icurClipPos, int iRefPos)
 {
     //Type1: for softclip reads
@@ -778,21 +492,21 @@ void ClsScaffoldFiller::AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& 
     //Use local Alignment
     LocalAlignment localAl;//--> 使用现有的库来进行Local Alignment
     int iStartOrg = -1, iEndOrg = -1, iStartCmp = -1, iEndCmp = -1;
-    switch(stSCReads.enClipPart)
+    switch((int)stSCReads.enClipPart)
     {
         case cpLeft:
         {
-            localAl.optAlign(stSCReads.pGap->stGap.strRefinedLeftFlank,
+            localAl.optAlign(stSCReads.pGap->stBamGap.strRefinedLeftFlank,
                         stSCReads.strClipSeq, iStartOrg, iEndOrg, iStartCmp, iEndCmp);
             int iLen = stSCReads.strClipSeq.length() - iEndCmp -
-                       (iEndOrg - stSCReads.pGap->stGap.strRefinedLeftFlank.length());
-            if(iEndCmp < stSCReads.strClipSeq.length()) // that means it could be extend
+                       (iEndOrg - stSCReads.pGap->stBamGap.strRefinedLeftFlank.length());
+            if(iEndCmp < (int)stSCReads.strClipSeq.length()) // that means it could be extend
                 stSCReads.strExtendSeq = stSCReads.strClipSeq.substr(iEndCmp, iLen);
             break;
         }
         case cpRight:
         {
-            localAl.optAlign(stSCReads.pGap->stGap.strRefinedRightFlank,
+            localAl.optAlign(stSCReads.pGap->stBamGap.strRefinedRightFlank,
                     stSCReads.strClipSeq, iStartOrg, iEndOrg, iStartCmp, iEndCmp);
             int iLen = iStartCmp - iStartOrg;
             if(iStartCmp > 0 && iLen > 0)
@@ -800,28 +514,22 @@ void ClsScaffoldFiller::AddValidBamReads(BamAlignment& al, St_GapRefinedByRept& 
             break;
         }
     }
-    m_stBamReads.vSCReads.push_back(stSCReads);
+    m_stBamFile.vSCReads.push_back(stSCReads);
 }
 
-string St_SoftClipReads::GetExtdSeq()
-{
-    if(!bRevsStrand)
-        return strExtendSeq;
-    return ClsAlgorithm::GetInstance().GetReverseCompelement(strExtendSeq);
-}
 
 bool sortfunction (St_SoftClipReads* pStI, St_SoftClipReads* pStJ)
 { return pStI->iMissingStart < pStJ->iMissingStart; } // from small to large
 
 void ClsScaffoldFiller::FillGapBySoftClipReads()
 {
-    if(m_stBamReads.vSCReads.empty())
+    if(m_stBamFile.vSCReads.empty())
         return;
-    m_stBamReads.vSCResult.clear();
+    //m_stBamFile.vGapAfterRept.clear();
 
     map<St_GapRefinedByRept*, vector<St_SoftClipReads*> > mpGapReads;
-    for(vector<St_SoftClipReads>::iterator itr = m_stBamReads.vSCReads.begin();
-        itr != m_stBamReads.vSCReads.end(); itr++)
+    for(vector<St_SoftClipReads>::iterator itr = m_stBamFile.vSCReads.begin();
+        itr != m_stBamFile.vSCReads.end(); itr++)
     {
         mpGapReads[itr->pGap].push_back(&(*itr));
     }
@@ -830,7 +538,7 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
         itr != mpGapReads.end(); itr++)
     {
         //For current gap -->Try to fill it
-        char* Type[2] = {"Left", "Right"};
+        const char* Type[2] = {"Left", "Right"};
 
         //-->For determine if use the reverse complementary as the final result
         //int iNormOre = 0;
@@ -843,10 +551,10 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
         for(vector<St_SoftClipReads*>::iterator itrSCReads = itr->second.begin();
             itrSCReads != itr->second.end(); itrSCReads++)
         {
-            if((*itrSCReads)->bRevsStrand)
-                continue;
+            //if((*itrSCReads)->bRevsStrand)//我们在这个地方应该允许所有的符合条件的soft clip reads都进来，然后在最后再去定夺是否需要reverse complementary
+            //    continue;
             cout << Type[(*itrSCReads)->enClipPart] << ": " << (*itrSCReads)->strExtendSeq << endl;
-            switch((*itrSCReads)->enClipPart)
+            switch((int)(*itrSCReads)->enClipPart)
             {
                 case cpLeft:
                 {
@@ -892,7 +600,7 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
             for(vector<string>::iterator itr = vExtendFromLeft.begin();
                 itr != vExtendFromLeft.end(); itr++)
             {
-                for(int i = 0; i<itr->length(); i++)
+                for(int i = 0; i<(int)itr->length(); i++)
                 {
                     int iIndex = iMaxExtendNumLeft -(itr->length() - i);
                     vCompLeftSeq[iIndex].mpNdCount[itr->at(i)]++;
@@ -933,7 +641,7 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
             for(vector<string>::iterator itr = vExtendFromRight.begin();
                 itr != vExtendFromRight.end(); itr++)
             {
-                for(int i = 0; i<itr->length(); i++)
+                for(int i = 0; i<(int)itr->length(); i++)
                 {
                     vCompRightSeq[i].mpNdCount[itr->at(i)]++;
                 }
@@ -965,17 +673,22 @@ void ClsScaffoldFiller::FillGapBySoftClipReads()
             }
         }
 
-        cout << "Left Extend Sum is: " << strLeftExtend << endl;
+        cout << "Left Extend Sum is: " << strLeftExtend  << endl;
         cout << "Right Extend Sum is: " << strRightExtend << endl;
 
         // 合并左flank和右flank
-        string strExtend;        
+        string strExtend;
+        //这里现在是存在bug的，也就是一边有一边没有，这种case是需要着重考虑的
         strExtend = CombineExt(strLeftExtend, strRightExtend/*, iStartOrg, iStartCmp, iEndOrg, iEndCmp*/);        
         //---------->        
         cout << "Additional Extend: " << strExtend << endl;
         string strRevComplment = ClsAlgorithm::GetInstance().GetReverseCompelement(strExtend);
         cout << "Additional Extend(Reverse Complementary): " << strRevComplment << endl;
-        m_stBamReads.vSCResult.push_back(St_FillResultBySCReads(itr->first, strExtend, strRevComplment));
+
+        itr->first->stBamGap.strFillSeq = strExtend;
+        itr->first->stBamGap.strRevCompFillSeq = strRevComplment;
+
+        //m_stBamFile.vGapAfterRept.push_back(St_GapRefinedByRept(itr->first->pOrgGap, strExtend, strRevComplment));
     }
 }
 
@@ -983,8 +696,11 @@ enum En_StringSide{ssLeft=0, ssRight, ssCenter, ssMax};
 //this is a recursive
 string ClsScaffoldFiller::CombineExt(string strExt1, string strExt2/*, int iStart1, int iStart2, int iEnd1, int iEnd2*/)
 {
-    //我们可以考虑一下-->global alignment --> 这样说不定会有比较好的结果 -->今天到此为止吧 --->一会儿去看看python去，完成一下那个老师的作业
+    //Step1: 首先判断两边有一者为空的情况，因为这种情况是需要去作local alignment的（强行做会使得得到的start和end的值异常大，从而导致后面的计算出错）
+    if(strExt1 == "" || strExt2 == "")
+        return strExt1 + strExt2;
 
+    //我们可以考虑一下-->global alignment --> 这样说不定会有比较好的结果 -->今天到此为止吧 --->一会儿去看看python去，完成一下那个老师的作业
     LocalAlignment localAl;//--> 使用现有的库来进行Local Alignment
     int iStart1 = -1, iStart2 = -1, iEnd1 = -1, iEnd2 = -1;
     localAl.optAlign(strExt1, strExt2, iStart1, iEnd1, iStart2, iEnd2);
@@ -996,118 +712,117 @@ string ClsScaffoldFiller::CombineExt(string strExt1, string strExt2/*, int iStar
     iEnd1--;
     iStart2--;
     iEnd2--;
-    if( (iStart1 == 0 && iEnd1 == strExt1.length() - 1) ||
-        (iStart2 == 0 && iEnd2 == strExt2.length() - 1))
+    if( (iStart1 == 0 && iEnd1 == (int)strExt1.length() - 1) ||
+        (iStart2 == 0 && iEnd2 == (int)strExt2.length() - 1))
     {
         return strExt1.length() >= strExt2.length() ? strExt1 : strExt2;
     }
 
     //Make sure the statement of cut side
     //For enExt1Side
-    if(iStart1 > 0 && iEnd1 < strExt1.length() - 1)
+    if(iStart1 > 0 && iEnd1 < (int)strExt1.length() - 1)
         enExt1Side = ssCenter;
-    else if(iStart1 > 0 && iEnd1 == strExt1.length() - 1)
+    else if(iStart1 > 0 && iEnd1 == (int)strExt1.length() - 1)
         enExt1Side =ssLeft;
-    else if(iStart1 == 0 && iEnd1 < strExt1.length() - 1)
+    else if(iStart1 == 0 && iEnd1 < (int)strExt1.length() - 1)
         enExt1Side =ssRight;
     else {}
     //For enExt2Side
-    if(iStart2 > 0 && iEnd2 < strExt2.length() - 1)
+    if(iStart2 > 0 && iEnd2 < (int)strExt2.length() - 1)
         enExt2Side = ssCenter;
-    else if(iStart2 > 0 && iEnd2 == strExt2.length() - 1)
+    else if(iStart2 > 0 && iEnd2 == (int)strExt2.length() - 1)
         enExt2Side =ssLeft;
-    else if(iStart2 == 0 && iEnd2 < strExt2.length() - 1)
+    else if(iStart2 == 0 && iEnd2 < (int)strExt2.length() - 1)
         enExt2Side =ssRight;
     else {}
 
     //Let's Compare
-    switch(enExt1Side)
+    switch((int)enExt1Side)
     {
-    case ssLeft:
-    {
-        string strSubExt1 = strExt1.substr(0, iStart1);
-        string strCmbExt1 = strExt1.substr(iStart1, iEnd1 - iStart1 + 1);
-        switch(enExt2Side)
-        {
         case ssLeft:
         {
-            string strSubExt2 = strExt2.substr(0, iStart2);
-            string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 + 1);
-            return CombineExt(strSubExt1, strSubExt2) +
-                   (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2);
+            string strSubExt1 = strExt1.substr(0, iStart1);
+            string strCmbExt1 = strExt1.substr(iStart1, iEnd1 - iStart1 + 1);
+            switch((int)enExt2Side)
+            {
+                case ssLeft:
+                {
+                    string strSubExt2 = strExt2.substr(0, iStart2);
+                    string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 + 1);
+                    return CombineExt(strSubExt1, strSubExt2) +
+                           (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2);
+                }
+                case ssRight:
+                {
+                    string strSubExt2 = strExt2.substr(iEnd2, strSubExt2.length() - iEnd2);
+                    string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 +1);
+                    return strSubExt1 +
+                           (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2) +
+                           strSubExt2;
+                }
+                case ssCenter:
+                {
+                    return "";
+                    //do not consider
+                    break;
+                }
+            }
+            break;
         }
         case ssRight:
         {
-            string strSubExt2 = strExt2.substr(iEnd2, strSubExt2.length() - iEnd2);
-            string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 +1);
-            return strSubExt1 +
-                   (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2) +
-                   strSubExt2;
+            string strSubExt1 = strExt1.substr(iEnd1, strExt1.length() - iEnd1);
+            string strCmbExt1 = strExt1.substr(iStart1, iEnd1 - iStart1 + 1);
+            switch((int)enExt2Side)
+            {
+                case ssLeft:
+                {
+                    string strSubExt2 = strExt2.substr(0, iStart2);
+                    string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 + 1);
+                    return strSubExt2 +
+                           (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2) +
+                           strSubExt1;
+                }
+                case ssRight:
+                {
+                    string strSubExt2 = strExt2.substr(iEnd2, strSubExt2.length() - iEnd2);
+                    string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 +1);
+                    return (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2) +
+                           CombineExt(strSubExt1, strSubExt2);
+                    break;
+                }
+                case ssCenter:
+                {
+                    return "";
+                    // do nothing
+                    break;
+                }
+            }
+            break;
         }
         case ssCenter:
         {
             return "";
-            //do not consider
-            int i = 0;
+            //do nothing
+            string strSubExt1Left = strExt1.substr(0, iStart1);
+            string strSubExt1Right = strExt1.substr(iEnd1, strExt1.length() - iEnd1);
+            switch((int)enExt2Side)
+            {
+            case ssLeft:
+            {
+                break;
+            }
+            case ssRight:
+            {
+                break;
+            }
+            case ssCenter:
+            {
+                break;
+            }
+            }
             break;
         }
-        }
-        break;
-    }
-    case ssRight:
-    {
-        string strSubExt1 = strExt1.substr(iEnd1, strExt1.length() - iEnd1);
-        string strCmbExt1 = strExt1.substr(iStart1, iEnd1 - iStart1 + 1);
-        switch(enExt2Side)
-        {
-        case ssLeft:
-        {
-            string strSubExt2 = strExt2.substr(0, iStart2);
-            string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 + 1);
-            return strSubExt2 +
-                   (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2) +
-                   strSubExt1;
-        }
-        case ssRight:
-        {
-            string strSubExt2 = strExt2.substr(iEnd2, strSubExt2.length() - iEnd2);
-            string strCmbExt2 = strExt2.substr(iStart2, iEnd2 - iStart2 +1);
-            return (strCmbExt1.length() >= strCmbExt2.length() ? strCmbExt1 : strCmbExt2) +
-                   CombineExt(strSubExt1, strSubExt2);
-            break;
-        }
-        case ssCenter:
-        {
-            return "";
-            // do nothing
-            break;
-        }
-        }
-        break;
-    }
-    case ssCenter:
-    {
-        return "";
-        //do nothing
-        string strSubExt1Left = strExt1.substr(0, iStart1);
-        string strSubExt1Right = strExt1.substr(iEnd1, strExt1.length() - iEnd1);
-        switch(enExt2Side)
-        {
-        case ssLeft:
-        {
-            break;
-        }
-        case ssRight:
-        {
-            break;
-        }
-        case ssCenter:
-        {
-            break;
-        }
-        }
-        break;
-    }
     }
     return "";
     /*
@@ -1153,29 +868,34 @@ void ClsScaffoldFiller::CheckFillQuality(St_ScaffoldUnit& stScaffoldUnit)
     {
         //Notice: the gap cannot be filled will be kept
         //Check each  gaps
-        for(vector<St_FillResultBySCReads>::iterator itrSCR = m_stBamReads.vSCResult.begin(); //SCR: soft clip reads
-            itrSCR != m_stBamReads.vSCResult.end(); itrSCR++)
-        {
-            if(itrSCR->pGap == &(*itr)) //got it
-            {
+        //for(vector<St_GapRefinedByRept>::iterator itrSCR = m_stBamFile.vGapAfterRept.begin(); //SCR: soft clip reads
+        //    itrSCR != m_stBamFile.vGapAfterRept.end(); itrSCR++)
+        //{
+        //    if(itrSCR->pGap == &(*itr)) //got it
+        //    {
                 //Add the repeat
-                stFillUnit.iStart = stFinalScaffoldUnit.strFillByNorm.length() - 1;
-                stFinalScaffoldUnit.strFillByNorm += itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
-                stFinalScaffoldUnit.strFillByNorm += itrSCR->strFillSeq; //Fill by Paired-End reads
-                if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strFillSeq == "")
+                stFillUnit.iStart = stFinalScaffoldUnit.strFillByNorm.length() - 1; //norm仅仅是意味着是正常的方向，并不是意味着修补的方式
+                stFinalScaffoldUnit.strFillByNorm += itr->pOrgGap->strFillSeq; //itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
+                stFinalScaffoldUnit.strFillByNorm += itr->stBamGap.strFillSeq; //itrSCR->stBamGap.strFillSeq; //Fill by Paired-End reads
+                //if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strFillSeq == "")
+                if(itr->pOrgGap->strFillSeq == "" && itr->stBamGap.strFillSeq == "")
                 {
                     //if both filling method are failed to fill any sequences--->Add the gap back to it.
-                    for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    //for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    for(int i=0; i<itr->pOrgGap->iLen; i++)
                     {
                         stFinalScaffoldUnit.strFillByNorm += "N";
                     }
                 }
-                stFinalScaffoldUnit.strFillByRevComp += itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
-                stFinalScaffoldUnit.strFillByRevComp += itrSCR->strRevCompFillSeq;
-                if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strRevCompFillSeq == "")
+                //因为暂时还没有发现repeats是reverse complementary的情况，因此我们在此虽然仅仅是
+                stFinalScaffoldUnit.strFillByRevComp += itr->pOrgGap->strFillSeq;//itrSCR->pGap->pOrgGap->strFillSeq; //Fill by Repeat
+                stFinalScaffoldUnit.strFillByRevComp += itr->stBamGap.strRevCompFillSeq;//itrSCR->strRevCompFillSeq;
+                //if(itrSCR->pGap->pOrgGap->strFillSeq == "" && itrSCR->strRevCompFillSeq == "")
+                if(itr->pOrgGap->strFillSeq == "" && itr->stBamGap.strRevCompFillSeq == "")
                 {
                     //if both filling method are failed to fill any sequences--->Add the gap back to it.
-                    for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    //for(int i=0; i<itrSCR->pGap->pOrgGap->iLen; i++)
+                    for(int i=0; i<itr->pOrgGap->iLen; i++)
                     {
                         stFinalScaffoldUnit.strFillByRevComp += "N";
                     }
@@ -1186,21 +906,27 @@ void ClsScaffoldFiller::CheckFillQuality(St_ScaffoldUnit& stScaffoldUnit)
                 //Add the sequence between current gap and the next gap
                 int iLen = -1;
                 int iStartPos = -1;
-                if(itrSCR + 1 < m_stBamReads.vSCResult.end())
+
+                //if(itrSCR + 1 < m_stBamFile.vSCResult.end()) //将中间的部分填补起来
+                if(itr + 1 < stScaffoldUnit.vGapRefinedByRept.end())
                 {
-                    iLen = (itrSCR+1)->pGap->pOrgGap->iStartPos - itrSCR->pGap->pOrgGap->iEndPos - 1;
-                    iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    //iLen = (itrSCR+1)->pGap->pOrgGap->iStartPos - itrSCR->pGap->pOrgGap->iEndPos - 1;
+                    //iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    iLen = (itr+1)->pOrgGap->iStartPos - itr->pOrgGap->iEndPos - 1;
+                    iStartPos = itr->pOrgGap->iEndPos+1;
                 }
                 else // the last one then
                 {
-                    iLen = stScaffoldUnit.strSeq.length() - itrSCR->pGap->pOrgGap->iEndPos - 1;
-                    iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    //iLen = stScaffoldUnit.strSeq.length() - itrSCR->pGap->pOrgGap->iEndPos - 1;
+                    //iStartPos = itrSCR->pGap->pOrgGap->iEndPos+1;
+                    iLen = stScaffoldUnit.strSeq.length() - itr->pOrgGap->iEndPos - 1;
+                    iStartPos = itr->pOrgGap->iEndPos+1;
                 }
                 stFinalScaffoldUnit.strFillByNorm += stScaffoldUnit.strSeq.substr(iStartPos, iLen);
                 stFinalScaffoldUnit.strFillByRevComp += stScaffoldUnit.strSeq.substr(iStartPos, iLen);
                 break;
-            }
-        }
+         //   }
+       // }
     }
     //Step2: Get Map Read Back to Refined Scaffold to check the coverage in gao area
     //1: Clear the folder rm -rf path/*  do not needed, since this function has been added into bam file creation

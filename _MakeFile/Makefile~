@@ -18,6 +18,9 @@ needleman_wunsch.o: needleman_wunsch.c needleman_wunsch.h
 clsalgorithm.o : clsalgorithm.cpp clsalgorithm.h  needleman_wunsch.h
 	$(CC) $(CFLAGS) -c clsalgorithm.cpp
 
+clscorestructure.o: clscorestructure.cpp clscorestructure.h
+	$(CC) $(CFLAGS) -c clscorestructure.cpp
+
 clsscaffoldfiller.o: clsscaffoldfiller.cpp clsscaffoldfiller.h
 	$(CC) $(CFLAGS) -c clsscaffoldfiller.cpp
 
@@ -48,8 +51,8 @@ fasta_parser.o : fasta_parser.cpp fasta_parser.h
 main.o: main.cpp 
 	$(CC) $(CFLAGS) -c main.cpp
 
-ScaffoldFillerTest: clsalgorithm.o clsscaffoldfiller.o alignment.o alignment_scoring.o needleman_wunsch.o bam_parse.o local_alignment.o \ fai_parser.o KmerUtils.o smith-waterman.o fasta_parser.o main.o 
-	$(CC) $(CFLAGS) -o ScaffoldFiller clsalgorithm.o clsscaffoldfiller.o alignment.o alignment_scoring.o needleman_wunsch.o bam_parse.o local_alignment.o fai_parser.o KmerUtils.o smith-waterman.o fasta_parser.o main.o \
+ScaffoldFillerTest: clsalgorithm.o clscorestructure.o clsscaffoldfiller.o alignment.o alignment_scoring.o needleman_wunsch.o bam_parse.o local_alignment.o \ fai_parser.o KmerUtils.o smith-waterman.o fasta_parser.o main.o 
+	$(CC) $(CFLAGS) -o ScaffoldFiller clsalgorithm.o clscorestructure.o clsscaffoldfiller.o alignment.o alignment_scoring.o needleman_wunsch.o bam_parse.o local_alignment.o fai_parser.o KmerUtils.o smith-waterman.o fasta_parser.o main.o \
 	-lbamtools -lz
 
 

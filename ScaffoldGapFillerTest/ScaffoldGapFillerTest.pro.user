@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 3.0.1, 2015-03-02T12:46:20. -->
+<!-- Written by QtCreator 3.0.1, 2015-03-04T00:19:29. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -230,7 +230,7 @@
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">ScaffoldGapFillerTest</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">Qt4ProjectManager.Qt4RunConfiguration:/home/lq/lxwg/WorkStudio/Prototype/ScafGapFiller_Test/ScaffoldGapFillerTest/ScaffoldGapFillerTest.pro</value>
-    <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.CommandLineArguments">/home/lq/Desktop/02_03_2015_Some_Cases_Of_Testing/Exp2/ScafRepeat.fa /home/lq/Desktop/02_03_2015_Some_Cases_Of_Testing/Exp2/ant.scafSeq</value>
+    <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.CommandLineArguments">/home/lq/Desktop/New_Test_Data/ScafRepeat.fa /home/lq/Desktop/New_Test_Data/_Scaffold_Testing /home/lq/Desktop/New_Test_Data/read1.fq /home/lq/Desktop/New_Test_Data/read2.fq</value>
     <value type="QString" key="Qt4ProjectManager.Qt4RunConfiguration.ProFile">ScaffoldGapFillerTest.pro</value>
     <value type="bool" key="Qt4ProjectManager.Qt4RunConfiguration.UseDyldImageSuffix">false</value>
     <value type="bool" key="Qt4ProjectManager.Qt4RunConfiguration.UseTerminal">true</value>

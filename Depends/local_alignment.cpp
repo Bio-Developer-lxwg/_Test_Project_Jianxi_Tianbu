@@ -25,7 +25,7 @@ unsigned char aln_nt16_table[256] = {
 	15,15,15,15, 15,15,15,15, 15,15,15,15, 15,15,15,15,
 	15,15,15,15, 15,15,15,15, 15,15,15,15, 15,15,15,15
 };
-char *aln_nt16_rev_table = "XAGRCMSVTWKDYHBN-";
+const char *aln_nt16_rev_table = "XAGRCMSVTWKDYHBN-";
 
 /* char -> 5 (=4+1) nucleotides */
 unsigned char aln_nt4_table[256] = {
@@ -46,7 +46,7 @@ unsigned char aln_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
-char *aln_nt4_rev_table = "AGCTN-";
+const char *aln_nt4_rev_table = "AGCTN-";
 
 /* char -> 22 (=20+1+1) amino acids */
 unsigned char aln_aa_table[256] = {
@@ -67,7 +67,7 @@ unsigned char aln_aa_table[256] = {
 	21,21,21,21, 21,21,21,21, 21,21,21,21, 21,21,21,21,
 	21,21,21,21, 21,21,21,21, 21,21,21,21, 21,21,21,21
 };
-char *aln_aa_rev_table = "ARNDCQEGHILKMFPSTWYV*X-";
+const char *aln_aa_rev_table = "ARNDCQEGHILKMFPSTWYV*X-";
                        /* 01234567890123456789012 */
 
 /* translation table. They are useless in stdaln.c, but when you realize you need it, you need not write the table again. */
@@ -77,7 +77,7 @@ unsigned char aln_trans_table_eu[66] = {
 	 5, 5, 8, 8,  1, 1, 1, 1, 14,14,14,14, 10,10,10,10,
 	20,20,18,18, 20,17, 4, 4, 15,15,15,15, 10,10,13,13, 21, 22
 };
-char *aln_trans_table_eu_char = "KKNNRRSSTTTTIMIIEEDDGGGGAAAAVVVVQQHHRRRRPPPPLLLL**YY*WCCSSSSLLFFX";
+const char *aln_trans_table_eu_char = "KKNNRRSSTTTTIMIIEEDDGGGGAAAAVVVVQQHHRRRRPPPPLLLL**YY*WCCSSSSLLFFX";
                               /* 01234567890123456789012345678901234567890123456789012345678901234 */
 int aln_sm_blosum62[] = {
 /*	 A  R  N  D  C  Q  E  G  H  I  L  K  M  F  P  S  T  W  Y  V  *  X */
@@ -1073,7 +1073,7 @@ void LocalAlignment::align(std::string& sref, std::string& ssgmt, int& optm_star
 		end_sgmt1=aln_local->end2;
 	}
 	
-	if(optm_end_ref < sref.length() && optm_end_sgmt < ssgmt.length())
+    if(optm_end_ref < (int)sref.length() && optm_end_sgmt < (int)ssgmt.length())
 	{
 		sub_ref = sref.substr(optm_end_ref, sref.length()-optm_end_ref);
 		sub_sgmt = ssgmt.substr(optm_end_sgmt, ssgmt.length()-optm_end_sgmt);
@@ -1112,7 +1112,7 @@ void LocalAlignment::optAlignWithRestSecondOpt(std::string& sref, std::string& s
 		
 	}
 	
-	if(optm_end_ref <= sref.length() && optm_end_sgmt <= ssgmt.length())
+    if(optm_end_ref <= (int)sref.length() && optm_end_sgmt <= (int)ssgmt.length())
 	{
 		rsub_ref = sref.substr(optm_end_ref, sref.length()-optm_end_ref);
 		rsub_sgmt = ssgmt.substr(optm_end_sgmt, ssgmt.length()-optm_end_sgmt);

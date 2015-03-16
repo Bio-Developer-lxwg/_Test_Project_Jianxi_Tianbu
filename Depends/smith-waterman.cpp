@@ -142,9 +142,9 @@ void SmithWaterman::traceback(int max_row, int max_col)
 {
 	int iprow=max_row;
 	int ipcol=max_col;
-	int size_sgmt=ssgmt.length();
+    //int size_sgmt=ssgmt.length();
 	
-	int flag=-1;
+    //int flag=-1;
 	int len=1;
 	std::string spre_op="";
 	std::string sop;

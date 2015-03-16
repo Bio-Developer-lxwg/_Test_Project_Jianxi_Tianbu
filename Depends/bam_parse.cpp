@@ -54,7 +54,7 @@ BamParse::~BamParse()
 void BamParse::parseCigar(vector<CigarOp>& cgdata, BamAlignmentRecord*& bar)//parse cigar
 {
 	pair<string,int> ptemp;
-	for(int i=0;i<cgdata.size();i++)
+    for(int i=0;i<(int)cgdata.size();i++)
 	{
 		ptemp.first=cgdata[i].Type;
 		
@@ -119,7 +119,7 @@ bool BamParse::parseAlignment(int chrom1, int chrom1_begin, int chrom2, int chro
 		}*/
 
 		BamRegion br(chrom1,chrom1_begin,chrom2,chrom2_end);
-		bool is_set=reader.SetRegion(br);
+        //bool is_set=reader.SetRegion(br);
 		//if(is_set==false)
 		//{
 		//	cerr << "Cannot set the region!!"<<endl;
@@ -150,6 +150,7 @@ bool BamParse::openReader()
         cerr << "Bamtools ERROR: could not open input BAM file: " << filename << endl;
         return false;
     }
+    return true;
 }
 
 bool BamParse::dumpAlignments(int chrom1, int chrom1_begin, int chrom2, int chrom2_end)
@@ -165,7 +166,7 @@ bool BamParse::dumpAlignments(int chrom1, int chrom1_begin, int chrom2, int chro
 		}*/
 
 		BamRegion br(chrom1,chrom1_begin,chrom2,chrom2_end);
-		bool is_set=reader.SetRegion(br);
+        bool is_set = reader.SetRegion(br);
 		//if(is_set==false)
 		//{
 		//	cerr << "Cannot set the region!!"<<endl;
@@ -322,7 +323,7 @@ void BamParse::getChromNameLength(int refid, string& name, int& length)
 {
 	if(refid==-1) return; //unmapped
 
-	assert(refid < refs.size()); // just a sanity check before accessing the vector 
+    assert(refid < (int)refs.size()); // just a sanity check before accessing the vector
 	const string& refname = refs[refid].RefName;
 	name=refname;
 	const int len=refs[refid].RefLength;

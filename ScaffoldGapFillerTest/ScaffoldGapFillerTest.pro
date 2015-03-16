@@ -2,7 +2,6 @@ TEMPLATE = app
 CONFIG += console
 CONFIG -= app_bundle
 CONFIG -= qt
-CONFIG += static
 LIBS += -lz
 #LIBS += -lm
 #LIBS += -lcrypt
@@ -44,22 +43,9 @@ HEADERS += \
     ../Depends/needleman_wunsch/uthash.h \
     clscorestructure.h
 
-
-win32:CONFIG(release, debug|release): LIBS += -L$$PWD/../Bamtools/lib/release/ -lbamtools
-else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/../Bamtools/lib/debug/ -lbamtools
-else:unix: LIBS += -L$$PWD/../Bamtools/lib/ -lbamtools
+unix:!macx: LIBS += -L$$PWD/../Bamtools/lib/ -lbamtools
 
 INCLUDEPATH += $$PWD/../Bamtools/include
 DEPENDPATH += $$PWD/../Bamtools/include
 
-win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../Bamtools/lib/release/libbamtools.a
-else:win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../Bamtools/lib/debug/libbamtools.a
-else:win32:!win32-g++:CONFIG(release, debug|release): PRE_TARGETDEPS += $$PWD/../Bamtools/lib/release/bamtools.lib
-else:win32:!win32-g++:CONFIG(debug, debug|release): PRE_TARGETDEPS += $$PWD/../Bamtools/lib/debug/bamtools.lib
-else:unix: PRE_TARGETDEPS += $$PWD/../Bamtools/lib/libbamtools.a
-
-
-#OTHER_FILES += \
-#    ../Bamtools/lib/libbamtools.so.2.3.0
-
-
+unix:!macx: PRE_TARGETDEPS += $$PWD/../Bamtools/lib/libbamtools.a

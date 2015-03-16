@@ -37,7 +37,7 @@ string ClsAlgorithm::GetHigherFolderPath(string strCurPath, int iLevel)
 {
     vector<int> vLevel;
     int iPos = 0;
-    while((iPos = strCurPath.find('/', iPos)) != string::npos)
+    while((iPos = (int)strCurPath.find('/', iPos)) != string::npos)
     {        
         vLevel.push_back(iPos);
         iPos += 1;
@@ -192,6 +192,7 @@ int ClsAlgorithm::CheckInterSection(int iStart1, int iEnd1, int iStart2, int iEn
                 return iEnd1 - iStart2 + 1;
         }
     }
+    return 0;
 }
 
 

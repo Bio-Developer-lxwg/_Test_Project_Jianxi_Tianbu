@@ -338,4 +338,94 @@ string ClsAlgorithm::CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffol
     return strSortedBamPath;
 }
 
+//This is just for DNA char, since we just considered 4 cases: A, T, G, C
+// AlignType: 0 means 左对齐，1 means 右对齐
+void ClsAlgorithm::GetMostFreqChar(vector<string>& vOrgStr, vector<char>& vMostFreqChar, vector<int>& vFreqValue, int iMaxLen, int iAlignType)
+{
+    vMostFreqChar.clear();
+    vFreqValue.clear();
+    for(int i=0; i <iMaxLen; i++)
+    {
+        char cDNA[vOrgStr.size()];
+        int iIndex = 0;
+        for(vector<string>::iterator itr = vOrgStr.begin(); itr != vOrgStr.end(); itr++)
+        {
+            if(iAlignType == 1) // 如果是右对其
+            {
+                if((int)itr->length() > i)
+                    cDNA[iIndex] = itr->at(itr->length()-i-1);
+                else
+                    cDNA[iIndex] = 'N';
+            }
+            else //否则则默认为0，属于左对齐的case
+            {
+                if(i < (int)itr->length())
+                    cDNA[iIndex] = itr->at(i);
+                else
+                    cDNA[iIndex] = 'N';
+            }
+            iIndex++;
+        }
+        //找到出现频率最高的字符
+        int aryCount[4] = {0, 0, 0, 0};
+        char aryDNA[4] = {'A', 'T', 'G', 'C'};
+        for(int iChar=0; iChar<(int)vOrgStr.size(); iChar++)
+        {
+            switch(cDNA[iChar])
+            {
+                case 'A':
+                    aryCount[0]++;
+                    break;
+                case 'T':
+                    aryCount[1]++;
+                    break;
+                case 'G':
+                    aryCount[2]++;
+                    break;
+                case 'C':
+                    aryCount[3]++;
+                    break;
+                case 'N':
+                    break;
+            }
+        }
+        int iMaxIndex = 0;
+        int iMaxCount = aryCount[0];
+        for(int i=1; i<4; i++)
+        {
+            if(iMaxCount < aryCount[i])
+            {
+                iMaxIndex = i;
+                iMaxCount = aryCount[i];
+            }
+        }
+        //不同的case，插入的方式不一样：右对齐是在头部插入，做对齐是在尾部插入
+        if(iAlignType == 1) //  如果是右对其
+        {
+            if(iMaxCount != 0) //防止盲目的加入，因为考虑到都为"空"的情况
+            {
+                vMostFreqChar.insert(vMostFreqChar.begin(), aryDNA[iMaxIndex]);
+                vFreqValue.insert(vFreqValue.begin(), iMaxCount);
+            }
+            else
+            {
+                vMostFreqChar.insert(vMostFreqChar.begin(), NULL);
+                vFreqValue.insert(vFreqValue.begin(), -1);
+            }
+        }
+        else //否则则默认为0，属于左对齐的case
+        {
+            if(iMaxCount != 0) //防止盲目的加入，因为考虑到都为"空"的情况
+            {
+                vMostFreqChar.push_back(aryDNA[iMaxIndex]);
+                vFreqValue.push_back(iMaxCount);
+            }
+            else
+            {
+                vMostFreqChar.push_back(NULL);
+                vFreqValue.push_back(-1);
+            }
+        }
+    }
+}
 

@@ -1,0 +1,37 @@
+Notice: 全文都是以 我的bio的项目作为基础进行说明的，其中
+URL = https://github.com/lxwgcool/_Test_Project_Jianxi_Tianbu.git
+因为表达方式的问题，所有碰到URL的地方在实际操作中都需要替换成 上面等号后面的内容
+
+1: Create Folder 
+(1) git init 
+(2) git remote add origin URL
+
+2: submit modifications 
+(1) git add .
+   或者要具体的添加某个文件怎可以用: git add 文件路径
+(2) git commit -m 'The commit you want to append with this term of submit'
+    注意：这里是单引号
+(3) git push -u origin master
+    
+3: update (将远端服务器代码与本地进行同步)
+(1) git pull URL
+
+4: check if there are stil something do not added in to the submit version at local repositery (检查本地库中是否还有没有提交的)
+(1) git status 
+
+5: check the history of commit 
+(1) git reflog: 检查之前提交的log记录
+
+tips:
+当发现push的时候提示有错误，那么我们先要去尝试一下 pull，这意味着先跟远程库进行同步
+
+
+
+
+
+
+
+
+
+
+

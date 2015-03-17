@@ -62,7 +62,7 @@ public:
                               int iLCAlnStart, int iLCAlnEnd, int iRCAlnStart, int iRCAlnEnd);
 
     //新增信的修补方式： 使用其他scaffold中的相应片段进行填补
-    void FillScaffoldUnitByDraftGeno(St_ScaffoldUnit& vScaffoldSet);
+    void FillScaffoldUnitByDraftGeno(St_ScaffoldUnit& vScaffoldSet);    
 
 private:  
     //---->Reads Path

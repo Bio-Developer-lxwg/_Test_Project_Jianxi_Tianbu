@@ -1193,64 +1193,11 @@ string ClsScaffoldFiller::CombineExtByWholeExt(string strLeftExt, string strRigh
         }
     }
     //进行相应的合并
+    //这里的合并的基础也是右对其
     vector<char> vRefinedWholeLeft;
     vector<int> vLeftExtAddCount;
-    for(int i=0; i <iMaxLeftLen; i++)
-    {
-        char cDNA[vRefinedLeftExt.size()];
-        int iIndex = 0;
-        for(vector<string>::iterator itr = vRefinedLeftExt.begin(); itr != vRefinedLeftExt.end(); itr++)
-        {
-            if((int)itr->length() > i)
-                cDNA[iIndex] = itr->at(itr->length()-i-1);
-            else
-                cDNA[iIndex] = 'N';
-            iIndex++;
-        }
-        //找到出现频率最高的字符
-        int aryCount[4] = {0, 0, 0, 0};
-        char aryDNA[4] = {'A', 'T', 'G', 'C'};
-        for(int iChar=0; iChar<(int)vRefinedLeftExt.size(); iChar++)
-        {
-            switch(cDNA[iChar])
-            {
-                case 'A':
-                    aryCount[0]++;
-                    break;
-                case 'T':
-                    aryCount[1]++;
-                    break;
-                case 'G':
-                    aryCount[2]++;
-                    break;
-                case 'C':
-                    aryCount[3]++;
-                    break;
-                case 'N':
-                    break;
-            }
-        }
-        int iMaxIndex = 0;
-        int iMaxCount = aryCount[0];
-        for(int i=1; i<4; i++)
-        {
-            if(iMaxCount < aryCount[i])
-            {
-                iMaxIndex = i;
-                iMaxCount = aryCount[i];
-            }
-        }
-        if(iMaxCount != 0) //防止盲目的加入，因为考虑到都为"空"的情况
-        {
-            vRefinedWholeLeft.insert(vRefinedWholeLeft.begin(), aryDNA[iMaxIndex]);
-            vLeftExtAddCount.insert(vLeftExtAddCount.begin(), iMaxCount);
-        }
-        else
-        {
-            vRefinedWholeLeft.insert(vRefinedWholeLeft.begin(), NULL);
-            vLeftExtAddCount.insert(vLeftExtAddCount.begin(), -1);
-        }
-    }
+    ClsAlgorithm::GetInstance().GetMostFreqChar(vRefinedLeftExt, vRefinedWholeLeft, vLeftExtAddCount, iMaxLeftLen, 1); //右对齐
+
     //&&&&&&&&&&--> 额外代码获取左边的延伸
     int iLeftExtAddNum = (int)vRefinedWholeLeft.size(); // additional left extend number
     vector<string> vRightExtAddLeftSeq;
@@ -1267,66 +1214,13 @@ string ClsScaffoldFiller::CombineExtByWholeExt(string strLeftExt, string strRigh
         iIndex++;
     }
     //<--
-    //得到之后，我们计算每个位置的词频率，然后选取最大的并记录下次数。==>
-    vector<int> vRightExtAddLeftCount;
+
+    //得到之后，我们计算每个位置的词频率，然后选取最大的并记录下次数。==>    
+    //这里是选择的右对齐
     vector<char> vRightExtAddLeft;
-    for(int i=0; i <iMaxRightExtAddLeftLen; i++)
-    {
-        char cDNA[vRightExtAddLeftSeq.size()];
-        int iIndex = 0;
-        for(vector<string>::iterator itr = vRightExtAddLeftSeq.begin();
-            itr != vRightExtAddLeftSeq.end(); itr++)
-        {
-            if((int)itr->length() > i)
-                cDNA[iIndex] = itr->at(itr->length()-i-1);
-            else
-                cDNA[iIndex] = 'N';
-            iIndex++;
-        }
-        //找到出现频率最高的字符
-        int aryCount[4] = {0, 0, 0, 0};
-        char aryDNA[4] = {'A', 'T', 'G', 'C'};
-        for(int iChar=0; iChar<(int)vRightExtAddLeftSeq.size(); iChar++)
-        {
-            switch(cDNA[iChar])
-            {
-                case 'A':
-                    aryCount[0]++;
-                    break;
-                case 'T':
-                    aryCount[1]++;
-                    break;
-                case 'G':
-                    aryCount[2]++;
-                    break;
-                case 'C':
-                    aryCount[3]++;
-                    break;
-                case 'N':
-                    break;
-            }
-        }
-        int iMaxIndex = 0;
-        int iMaxCount = aryCount[0];
-        for(int i=1; i<4; i++)
-        {
-            if(iMaxCount < aryCount[i])
-            {
-                iMaxIndex = i;
-                iMaxCount = aryCount[i];
-            }
-        }
-        if(iMaxCount != 0) //防止盲目的加入，因为考虑到都为"空"的情况
-        {
-            vRightExtAddLeft.insert(vRightExtAddLeft.begin(), aryDNA[iMaxIndex]);
-            vRightExtAddLeftCount.insert(vRightExtAddLeftCount.begin(), iMaxCount);
-        }
-        else
-        {
-            vRightExtAddLeft.insert(vRightExtAddLeft.begin(), NULL);
-            vRightExtAddLeftCount.insert(vRightExtAddLeftCount.begin(), -1);
-        }
-    }
+    vector<int> vRightExtAddLeftCount;
+    ClsAlgorithm::GetInstance().GetMostFreqChar(vRightExtAddLeftSeq, vRightExtAddLeft, vRightExtAddLeftCount, iMaxRightExtAddLeftLen, 1); //右对齐
+
     //然后跟之前的 strRefinedWholeLeft进行比较
     string strRefinedWholeLeft;
     int iOffSet = iLeftExtAddNum - iMaxRightExtAddLeftLen;
@@ -1382,54 +1276,15 @@ string ClsScaffoldFiller::CombineExtByWholeExt(string strLeftExt, string strRigh
         }
     }
 
+    //这里是选择左对齐跟之前的是有所区别的 (之前的对齐方式是右对齐)
     string strRefinedWholeRight = "";
-    for(int i=0; i <iMaxRightLen; i++)
+    vector<char> vRefinedWholeRight;
+    vector<int> vRefinedWholeRightCount;
+    ClsAlgorithm::GetInstance().GetMostFreqChar(vRefinedRightExt, vRefinedWholeRight, vRefinedWholeRightCount, iMaxRightLen, 0); //这里是左对齐
+    for(vector<char>::iterator itr = vRefinedWholeRight.begin(); itr != vRefinedWholeRight.end(); itr++)
     {
-        char cDNA[vRefinedRightExt.size()];
-        int iIndex = 0;
-        for(vector<string>::iterator itr = vRefinedRightExt.begin(); itr != vRefinedRightExt.end(); itr++)
-        {
-            if(i < (int)itr->length())
-                cDNA[iIndex] = itr->at(i);
-            else
-                cDNA[iIndex] = 'N';
-            iIndex++;
-        }
-        //找到出现频率最高的字符
-        int aryCount[4] = {0, 0, 0, 0};
-        char aryDNA[4] = {'A', 'T', 'G', 'C'};
-        for(int iChar=0; iChar<(int)vRefinedRightExt.size(); iChar++)
-        {
-            switch(cDNA[iChar])
-            {
-                case 'A':
-                    aryCount[0]++;
-                    break;
-                case 'T':
-                    aryCount[1]++;
-                    break;
-                case 'G':
-                    aryCount[2]++;
-                    break;
-                case 'C':
-                    aryCount[3]++;
-                    break;
-                case 'N':
-                    break;
-            }
-        }
-        int iMaxIndex = 0;
-        int iMaxCount = aryCount[0];
-        for(int i=1; i<4; i++)
-        {
-            if(iMaxCount < aryCount[i])
-            {
-                iMaxIndex = i;
-                iMaxCount = aryCount[i];
-            }
-        }
-        if(iMaxCount != 0)
-            strRefinedWholeRight = strRefinedWholeRight + aryDNA[iMaxIndex];
+        if(*itr != NULL)
+            strRefinedWholeRight += *itr;
     }
     strRefinedWholeRight = strLeftExt + strRefinedWholeRight;
 

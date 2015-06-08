@@ -12,8 +12,10 @@ public:
 	SmithWaterman(std::string sref, std::string ssgmt);
 
 public:
-	void align();//align segment with reference sequence
+    void align();//align segment with reference sequence
+    void GetAlnSeqResult(std::string& strRefAln, std::string& strSmpAln);
 	void outputCigar();
+    void outputAlnResult();
 
 private:
 	void loadMatrix(int** &matrix, int size_ref, int size_sgmt);//allocate memory for score_matrix and path_matrix
@@ -29,6 +31,8 @@ private:
 	std::vector<std::pair<int,std::string> > cigar;//save cigar information
 	int lm_map_pos;//left most mapping position
 	int max_score;//maximum mapping socre
+    std::string m_strAlnRef; //Ref Aln Result
+    std::string m_strAlnSmp; //Sample Aln Result
 };
 
 #endif

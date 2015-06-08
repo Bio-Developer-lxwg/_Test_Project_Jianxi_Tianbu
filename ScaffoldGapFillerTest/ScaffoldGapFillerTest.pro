@@ -18,7 +18,13 @@ SOURCES += main.cpp \
     ../Depends/needleman_wunsch/alignment.c \
     ../Depends/needleman_wunsch/alignment_scoring.c \
     ../Depends/needleman_wunsch/needleman_wunsch.c \
-    clscorestructure.cpp
+    clscorestructure.cpp \
+    clsqualitycontrol.cpp \
+    clspairendfill.cpp \
+    clsdraftgenofill.cpp \
+    clspseudorepeatfill.cpp \
+    clsrepeatbuild.cpp \
+    clsbasescaffoldfill.cpp
 INCLUDEPATH += ../Depends/
 INCLUDEPATH += ../Depends/needleman_wunsch/
 INCLUDEPATH += ../Bamtools/include/needleman_wunsch/
@@ -41,7 +47,13 @@ HEADERS += \
     ../Depends/needleman_wunsch/alignment_scoring.h \
     ../Depends/needleman_wunsch/needleman_wunsch.h \
     ../Depends/needleman_wunsch/uthash.h \
-    clscorestructure.h
+    clscorestructure.h \
+    clsqualitycontrol.h \
+    clspairendfill.h \
+    clsdraftgenofill.h \
+    clspseudorepeatfill.h \
+    clsrepeatbuild.h \
+    clsbasescaffoldfill.h
 
 unix:!macx: LIBS += -L$$PWD/../Bamtools/lib/ -lbamtools
 

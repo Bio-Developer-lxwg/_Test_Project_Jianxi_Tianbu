@@ -57,7 +57,13 @@ SOURCES       = ../ScaffoldGapFillerTest/main.cpp \
 		../Depends/needleman_wunsch/alignment.c \
 		../Depends/needleman_wunsch/alignment_scoring.c \
 		../Depends/needleman_wunsch/needleman_wunsch.c \
-		../ScaffoldGapFillerTest/clscorestructure.cpp 
+		../ScaffoldGapFillerTest/clscorestructure.cpp \
+		../ScaffoldGapFillerTest/clsqualitycontrol.cpp \
+		../ScaffoldGapFillerTest/clspairendfill.cpp \
+		../ScaffoldGapFillerTest/clsdraftgenofill.cpp \
+		../ScaffoldGapFillerTest/clspseudorepeatfill.cpp \
+		../ScaffoldGapFillerTest/clsrepeatbuild.cpp \
+		../ScaffoldGapFillerTest/clsbasescaffoldfill.cpp 
 OBJECTS       = main.o \
 		fasta_parser.o \
 		clsalgorithm.o \
@@ -70,7 +76,13 @@ OBJECTS       = main.o \
 		alignment.o \
 		alignment_scoring.o \
 		needleman_wunsch.o \
-		clscorestructure.o
+		clscorestructure.o \
+		clsqualitycontrol.o \
+		clspairendfill.o \
+		clsdraftgenofill.o \
+		clspseudorepeatfill.o \
+		clsrepeatbuild.o \
+		clsbasescaffoldfill.o
 DIST          = /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/spec_pre.prf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/common/shell-unix.conf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/common/unix.conf \
@@ -386,7 +398,13 @@ main.o: ../ScaffoldGapFillerTest/main.cpp ../ScaffoldGapFillerTest/clsscaffoldfi
 		../Bamtools/include/api/SamReadGroup.h \
 		../Bamtools/include/api/SamSequenceDictionary.h \
 		../Bamtools/include/api/SamSequence.h \
-		../ScaffoldGapFillerTest/clsalgorithm.h
+		../ScaffoldGapFillerTest/clspseudorepeatfill.h \
+		../ScaffoldGapFillerTest/clsbasescaffoldfill.h \
+		../ScaffoldGapFillerTest/clsqualitycontrol.h \
+		../ScaffoldGapFillerTest/clsrepeatbuild.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h \
+		../ScaffoldGapFillerTest/clsdraftgenofill.h \
+		../ScaffoldGapFillerTest/clspairendfill.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o ../ScaffoldGapFillerTest/main.cpp
 
 fasta_parser.o: ../Depends/fasta_parser.cpp ../Depends/fasta_parser.h
@@ -434,15 +452,22 @@ clsscaffoldfiller.o: ../ScaffoldGapFillerTest/clsscaffoldfiller.cpp ../ScaffoldG
 		../Bamtools/include/api/SamReadGroup.h \
 		../Bamtools/include/api/SamSequenceDictionary.h \
 		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clspseudorepeatfill.h \
+		../ScaffoldGapFillerTest/clsbasescaffoldfill.h \
+		../ScaffoldGapFillerTest/clsqualitycontrol.h \
+		../ScaffoldGapFillerTest/clsrepeatbuild.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h \
+		../ScaffoldGapFillerTest/clsdraftgenofill.h \
+		../ScaffoldGapFillerTest/clspairendfill.h \
 		../Depends/local_alignment.h \
 		../Depends/stdaln.h \
 		../Depends/smith-waterman.h \
-		../ScaffoldGapFillerTest/clsalgorithm.h \
 		../Bamtools/include/api/BamMultiReader.h \
 		../Bamtools/include/api/BamWriter.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clsscaffoldfiller.o ../ScaffoldGapFillerTest/clsscaffoldfiller.cpp
 
-smith-waterman.o: ../Depends/smith-waterman.cpp ../Depends/smith-waterman.h
+smith-waterman.o: ../Depends/smith-waterman.cpp ../Depends/smith-waterman.h \
+		../Depends/fasta_parser.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o smith-waterman.o ../Depends/smith-waterman.cpp
 
 local_alignment.o: ../Depends/local_alignment.cpp ../Depends/local_alignment.h \
@@ -509,6 +534,146 @@ clscorestructure.o: ../ScaffoldGapFillerTest/clscorestructure.cpp ../ScaffoldGap
 		../Bamtools/include/api/SamSequenceDictionary.h \
 		../Bamtools/include/api/SamSequence.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clscorestructure.o ../ScaffoldGapFillerTest/clscorestructure.cpp
+
+clsqualitycontrol.o: ../ScaffoldGapFillerTest/clsqualitycontrol.cpp ../ScaffoldGapFillerTest/clsqualitycontrol.h \
+		../ScaffoldGapFillerTest/clscorestructure.h \
+		../Depends/fasta_parser.h \
+		../Depends/KmerUtils.h \
+		../Bamtools/include/api/BamReader.h \
+		../Bamtools/include/api/api_global.h \
+		../Bamtools/include/shared/bamtools_global.h \
+		../Bamtools/include/api/BamAlignment.h \
+		../Bamtools/include/api/BamAux.h \
+		../Bamtools/include/api/BamConstants.h \
+		../Bamtools/include/api/BamIndex.h \
+		../Bamtools/include/api/SamHeader.h \
+		../Bamtools/include/api/SamProgramChain.h \
+		../Bamtools/include/api/SamProgram.h \
+		../Bamtools/include/api/SamReadGroupDictionary.h \
+		../Bamtools/include/api/SamReadGroup.h \
+		../Bamtools/include/api/SamSequenceDictionary.h \
+		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h \
+		../Depends/local_alignment.h \
+		../Depends/stdaln.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clsqualitycontrol.o ../ScaffoldGapFillerTest/clsqualitycontrol.cpp
+
+clspairendfill.o: ../ScaffoldGapFillerTest/clspairendfill.cpp ../ScaffoldGapFillerTest/clspairendfill.h \
+		../ScaffoldGapFillerTest/clsbasescaffoldfill.h \
+		../ScaffoldGapFillerTest/clscorestructure.h \
+		../Depends/fasta_parser.h \
+		../Depends/KmerUtils.h \
+		../Bamtools/include/api/BamReader.h \
+		../Bamtools/include/api/api_global.h \
+		../Bamtools/include/shared/bamtools_global.h \
+		../Bamtools/include/api/BamAlignment.h \
+		../Bamtools/include/api/BamAux.h \
+		../Bamtools/include/api/BamConstants.h \
+		../Bamtools/include/api/BamIndex.h \
+		../Bamtools/include/api/SamHeader.h \
+		../Bamtools/include/api/SamProgramChain.h \
+		../Bamtools/include/api/SamProgram.h \
+		../Bamtools/include/api/SamReadGroupDictionary.h \
+		../Bamtools/include/api/SamReadGroup.h \
+		../Bamtools/include/api/SamSequenceDictionary.h \
+		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clsqualitycontrol.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h \
+		../Depends/local_alignment.h \
+		../Depends/stdaln.h \
+		../Depends/smith-waterman.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clspairendfill.o ../ScaffoldGapFillerTest/clspairendfill.cpp
+
+clsdraftgenofill.o: ../ScaffoldGapFillerTest/clsdraftgenofill.cpp ../ScaffoldGapFillerTest/clsdraftgenofill.h \
+		../ScaffoldGapFillerTest/clsbasescaffoldfill.h \
+		../ScaffoldGapFillerTest/clscorestructure.h \
+		../Depends/fasta_parser.h \
+		../Depends/KmerUtils.h \
+		../Bamtools/include/api/BamReader.h \
+		../Bamtools/include/api/api_global.h \
+		../Bamtools/include/shared/bamtools_global.h \
+		../Bamtools/include/api/BamAlignment.h \
+		../Bamtools/include/api/BamAux.h \
+		../Bamtools/include/api/BamConstants.h \
+		../Bamtools/include/api/BamIndex.h \
+		../Bamtools/include/api/SamHeader.h \
+		../Bamtools/include/api/SamProgramChain.h \
+		../Bamtools/include/api/SamProgram.h \
+		../Bamtools/include/api/SamReadGroupDictionary.h \
+		../Bamtools/include/api/SamReadGroup.h \
+		../Bamtools/include/api/SamSequenceDictionary.h \
+		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clsqualitycontrol.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clsdraftgenofill.o ../ScaffoldGapFillerTest/clsdraftgenofill.cpp
+
+clspseudorepeatfill.o: ../ScaffoldGapFillerTest/clspseudorepeatfill.cpp ../ScaffoldGapFillerTest/clspseudorepeatfill.h \
+		../ScaffoldGapFillerTest/clsbasescaffoldfill.h \
+		../ScaffoldGapFillerTest/clscorestructure.h \
+		../Depends/fasta_parser.h \
+		../Depends/KmerUtils.h \
+		../Bamtools/include/api/BamReader.h \
+		../Bamtools/include/api/api_global.h \
+		../Bamtools/include/shared/bamtools_global.h \
+		../Bamtools/include/api/BamAlignment.h \
+		../Bamtools/include/api/BamAux.h \
+		../Bamtools/include/api/BamConstants.h \
+		../Bamtools/include/api/BamIndex.h \
+		../Bamtools/include/api/SamHeader.h \
+		../Bamtools/include/api/SamProgramChain.h \
+		../Bamtools/include/api/SamProgram.h \
+		../Bamtools/include/api/SamReadGroupDictionary.h \
+		../Bamtools/include/api/SamReadGroup.h \
+		../Bamtools/include/api/SamSequenceDictionary.h \
+		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clsqualitycontrol.h \
+		../ScaffoldGapFillerTest/clsrepeatbuild.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h \
+		../Depends/local_alignment.h \
+		../Depends/stdaln.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clspseudorepeatfill.o ../ScaffoldGapFillerTest/clspseudorepeatfill.cpp
+
+clsrepeatbuild.o: ../ScaffoldGapFillerTest/clsrepeatbuild.cpp ../ScaffoldGapFillerTest/clsrepeatbuild.h \
+		../ScaffoldGapFillerTest/clscorestructure.h \
+		../Depends/fasta_parser.h \
+		../Depends/KmerUtils.h \
+		../Bamtools/include/api/BamReader.h \
+		../Bamtools/include/api/api_global.h \
+		../Bamtools/include/shared/bamtools_global.h \
+		../Bamtools/include/api/BamAlignment.h \
+		../Bamtools/include/api/BamAux.h \
+		../Bamtools/include/api/BamConstants.h \
+		../Bamtools/include/api/BamIndex.h \
+		../Bamtools/include/api/SamHeader.h \
+		../Bamtools/include/api/SamProgramChain.h \
+		../Bamtools/include/api/SamProgram.h \
+		../Bamtools/include/api/SamReadGroupDictionary.h \
+		../Bamtools/include/api/SamReadGroup.h \
+		../Bamtools/include/api/SamSequenceDictionary.h \
+		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clsalgorithm.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clsrepeatbuild.o ../ScaffoldGapFillerTest/clsrepeatbuild.cpp
+
+clsbasescaffoldfill.o: ../ScaffoldGapFillerTest/clsbasescaffoldfill.cpp ../ScaffoldGapFillerTest/clsbasescaffoldfill.h \
+		../ScaffoldGapFillerTest/clscorestructure.h \
+		../Depends/fasta_parser.h \
+		../Depends/KmerUtils.h \
+		../Bamtools/include/api/BamReader.h \
+		../Bamtools/include/api/api_global.h \
+		../Bamtools/include/shared/bamtools_global.h \
+		../Bamtools/include/api/BamAlignment.h \
+		../Bamtools/include/api/BamAux.h \
+		../Bamtools/include/api/BamConstants.h \
+		../Bamtools/include/api/BamIndex.h \
+		../Bamtools/include/api/SamHeader.h \
+		../Bamtools/include/api/SamProgramChain.h \
+		../Bamtools/include/api/SamProgram.h \
+		../Bamtools/include/api/SamReadGroupDictionary.h \
+		../Bamtools/include/api/SamReadGroup.h \
+		../Bamtools/include/api/SamSequenceDictionary.h \
+		../Bamtools/include/api/SamSequence.h \
+		../ScaffoldGapFillerTest/clsqualitycontrol.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o clsbasescaffoldfill.o ../ScaffoldGapFillerTest/clsbasescaffoldfill.cpp
 
 ####### Install
 

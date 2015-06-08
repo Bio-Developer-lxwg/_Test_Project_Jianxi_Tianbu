@@ -29,7 +29,7 @@ public:
 public:	
     //Step 1: Output the customized sequence ------------>lxwg
     void OutPutSubSeq(string strInputFastPath, string strOutputFastPath, int iStartPos, int iLength);
-    int ReadFasta(string& strPath, vector<St_Fasta>& vFasta);
+    int ReadFasta(string strPath, vector<St_Fasta>& vFasta);
     //<-----------------
     //Step 2:Get the random sequence
     void OutputRandomSeq(string strOutputPath, string strShortRepName, unsigned int iLength);

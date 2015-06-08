@@ -62,7 +62,7 @@ char GetComplement(char bp)
 FastaParser::FastaParser()
 {}
 
-int FastaParser::ReadFasta(string& strPath, vector<St_Fasta>& vFasta)
+int FastaParser::ReadFasta(string strPath, vector<St_Fasta>& vFasta)
 {
     if(::access(strPath.c_str(), 0) != 0)
     {

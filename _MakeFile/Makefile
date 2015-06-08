@@ -6,7 +6,7 @@ BAMTOOLS_LD=../Bamtools/lib
 #INCLUDES:= ../Depends ../Depends/needleman_wunsch ../Bamtools/include/  # 头文件目录
 
 CC = g++
-CFLAGS =  -O3 -Wall -static -I$(BAMTOOLS) -L$(BAMTOOLS_LD) -Wl,-rpath,$(BAMTOOLS_LD)
+CFLAGS = -O3 -Wall -static -I$(BAMTOOLS) -L$(BAMTOOLS_LD) -Wl,-rpath,$(BAMTOOLS_LD)
 
 OBJ = ./obj/
 

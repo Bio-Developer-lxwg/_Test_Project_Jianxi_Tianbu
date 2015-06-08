@@ -10,9 +10,28 @@
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
-
+#include <math.h>
 #define MAXBUFSIZE 260
 using namespace std;
+
+
+bool sortfunction (St_SoftClipReads* pStI, St_SoftClipReads* pStJ)
+{
+    return pStI->iMissingStart < pStJ->iMissingStart;
+} // from small to large
+
+bool sortfunctionLength (string str1, string str2)
+{
+    return str1.length() < str2.length();
+} // from short to long
+
+//Notice: Do not use reference, since transform will change the original value
+string::size_type FindStrPosByNS(string strBaseSeq, string strSeed, int iQueryPos) //None Sensetive
+{
+    std::transform(strBaseSeq.begin(), strBaseSeq.end(), strBaseSeq.begin(), ::toupper);
+    std::transform(strSeed.begin(), strSeed.end(), strSeed.begin(), ::toupper);
+    return strBaseSeq.find(strSeed, iQueryPos);
+}
 
 string ClsAlgorithm::GetCurExePath()
 {
@@ -39,7 +58,7 @@ string ClsAlgorithm::GetCurExeFolderPath()
 string ClsAlgorithm::GetHigherFolderPath(string strCurPath, int iLevel)
 {
     vector<int> vLevel;
-    int iPos = 0;
+    size_t iPos = 0;
     while((iPos = strCurPath.find('/', iPos)) != string::npos)
     {        
         vLevel.push_back(iPos);
@@ -64,39 +83,43 @@ char ClsAlgorithm::GetComplement(char bp)
     {
         return bp;
     }
-    char bpUse = toupper(bp);
+    char bpUse = bp;//toupper(bp);
     if( bpUse == 'A')
     {
         return 'T';
     }
-    //else if(bp == 'a')
-    //{
-    //    return 't';
-    //}
+    else if(bpUse == 'a')
+    {
+        return 't';
+    }
     else if( bpUse == 'T')
     {
         return 'A';
     }
-    //else if( bpUse == 't')
-    //{
-    //    return 'a';
-    //}
+    else if( bpUse == 't')
+    {
+        return 'a';
+    }
     else if( bpUse == 'G')
     {
         return 'C';
     }
-    //else if(bp == 'g')
-    //{
-    //    ;
-    //}
+    else if(bpUse == 'g')
+    {
+        return 'c';
+    }
     else if(bpUse == 'C')
     {
         return 'G';
     }
+    else if(bpUse == 'c')
+    {
+        return 'g';
+    }
     return 'N';
 }
 
-string ClsAlgorithm::GetReverseCompelement(string strOrg, bool bRevsCompelement)
+string ClsAlgorithm::GetReverseCompelement(string strOrg, bool bRevsCompelement) //We need keep case sensitive
 {
     if(!bRevsCompelement) //Do not need the reverse complementary sequence
         return strOrg;
@@ -198,8 +221,8 @@ int ClsAlgorithm::CheckInterSection(int iStart1, int iEnd1, int iStart2, int iEn
     return 0;
 }
 
-string ClsAlgorithm::CreateBamFile(string& strFaName, string& strRefSeq,
-                                   string& strReads1Path, string& strReads2Path)
+string ClsAlgorithm::CreateBamFile(string strFaName, string& strRefSeq,
+                                   string& strReads1Path, string& strReads2Path, bool bMapAll)
 {
     cout << "Create Bam File" << endl;
     //1: Save such scaffold as the reference file
@@ -219,9 +242,14 @@ string ClsAlgorithm::CreateBamFile(string& strFaName, string& strRefSeq,
     ofs.close();
 
     //2: Build Index for this Reference Fa File
-    strCmd = "bwa index -a bwtsw " + strRefPath;
-    system(strCmd.c_str());
+    string strSpcialFileOfRefIndex = strRefPath + ".bwt";
+    if(::access(strSpcialFileOfRefIndex.c_str(), 0) != 0) //This means such file DO NOT exsited
+    {
+        strCmd = "bwa index -a bwtsw " + strRefPath;
+        system(strCmd.c_str());
+    }
 
+    /*
     //3: Alignment-->Build SAI
     //string strRead1Path = m_strReads1Path//strRootPath + "read1.fq";
     //string strRead2Path = strRootPath + "read2.fq";
@@ -234,9 +262,15 @@ string ClsAlgorithm::CreateBamFile(string& strFaName, string& strRefSeq,
 
     //4: Generate SAM file
     string strSamPath = strRootPath + "Read.sam";
-    strCmd = "bwa sample -f " + strSamPath + " " +
+    strCmd = "bwa sampe -f " + strSamPath + " " +
              strRefPath + " " + strSai1Path + " " + strSai2Path + " " +
              strReads1Path + " " + strReads2Path;
+    system(strCmd.c_str());*/
+    string strSamPath = strRootPath + "Read.sam";
+    if(bMapAll) //Use map all
+        strCmd = "bwa mem -a " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    else
+        strCmd = "bwa mem " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
     system(strCmd.c_str());
 
     //5: transfer sam to bam
@@ -254,12 +288,25 @@ string ClsAlgorithm::CreateBamFile(string& strFaName, string& strRefSeq,
     strCmd = "bamtools index -in " + strSortedBamPath;
     system(strCmd.c_str());
 
+    //8:Remove the sam file and the bam file
+    strCmd = "rm -f " + strSamPath;
+    system(strCmd.c_str());
+    //b) Delete Bam File
+    strCmd = "rm -f " + strBamPath;
+    system(strCmd.c_str());
+
     return strSortedBamPath;
 }
 
+/*
+ *Notice:
+ * 因为在这里我们有很多的scaffold candidate， 所以我们需要把map all 打开，这样能够保证有最多数的相应的read能够被很好的map上去
+ *
+ */
 string ClsAlgorithm::CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffoldUnit,
                                                string& strReads1Path, string& strReads2Path,
-                                               string strBamFileName, En_ScaffoldDataType enDataType)
+                                               string strBamFileName, En_ScaffoldDataType enDataType,
+                                               bool bMapAll)
 {
     cout << "Create Bam File" << endl;
     //1: Save such scaffold as the reference file
@@ -292,8 +339,16 @@ string ClsAlgorithm::CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffol
     ofs.close();
 
     //2: Build Index for this Reference Fa File
-    strCmd = "bwa index -a bwtsw " + strRefPath;
-    system(strCmd.c_str());
+    //Notice: we do not need to build the index everytime.
+    //As a result, we could just create it at the first time by detect some special files
+    //-->Detect if need to Build Index, build the index if it is needed
+    string strSpcialFileOfRefIndex = strRefPath + ".bwt";
+    if(::access(strSpcialFileOfRefIndex.c_str(), 0) != 0) //This means such file DO NOTexsited
+    {
+        strCmd = "bwa index -a bwtsw " + strRefPath;
+        system(strCmd.c_str());
+    }
+    //<--
 
     //3: Alignment-->Build SAI
     //string strRead1Path = m_strReads1Path//strRootPath + "read1.fq";
@@ -307,7 +362,110 @@ string ClsAlgorithm::CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffol
 
     //4: Generate SAM file
     string strSamPath = strRootPath + (strBamFileName == "" ? "Read.sam" : (strBamFileName + ".sam"));
-    strCmd = "bwa mem " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    if(bMapAll) //Use map all
+        strCmd = "bwa mem -a " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    else
+        strCmd = "bwa mem " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    system(strCmd.c_str());
+
+    //5: transfer sam to bam
+    string strBamPath = strRootPath + (strBamFileName == "" ? "Read.bam" : (strBamFileName + ".bam"));
+    strCmd = "samtools view -bS " + strSamPath + " > " + strBamPath;
+    system(strCmd.c_str());
+
+    //6: Sort bam file
+    string strSortedBamPath = strRootPath +
+                              (strBamFileName == "" ? "Read.sorted.bam" :
+                                                      (strBamFileName + ".sorted.bam"));
+    strCmd = "bamtools sort -in " +
+            strBamPath + " -out " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //7:build index file for bam file
+    strCmd = "bamtools index -in " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //8: delete the bamfile and samfile since they are too large to be stored
+    //a) Delete Sam File
+    strCmd = "rm -f " + strSamPath;
+    system(strCmd.c_str());
+    //b) Delete Bam File
+    strCmd = "rm -f " + strBamPath;
+    system(strCmd.c_str());
+
+    return strSortedBamPath;
+}
+
+string ClsAlgorithm::CreateBamFileForMultiRefPEReads(string& strRefPath, string& strReads1Path,
+                                                     string& strReads2Path, string strBamFileName, bool bMapAll)
+{
+    string strRootPath = ClsAlgorithm::GetInstance().GetHigherFolderPath(get_current_dir_name());
+    strRootPath += "TempFile/";
+    //2: Build Index for this Reference Fa File
+    string strCmd = "";
+    string strSpcialFileOfRefIndex = strRefPath + ".bwt";
+    if(::access(strSpcialFileOfRefIndex.c_str(), 0) != 0) //This means such file DO NOTexsited
+    {
+        strCmd = "bwa index -a bwtsw " + strRefPath;
+        system(strCmd.c_str());
+    }
+
+    //4: Generate SAM file
+    string strSamPath = strRootPath + (strBamFileName == "" ? "Read.sam" : (strBamFileName + ".sam"));
+    if(bMapAll) //Use map all
+        strCmd = "bwa mem -a " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    else
+        strCmd = "bwa mem " + strRefPath + " " + strReads1Path + " " + strReads2Path + " > " + strSamPath;
+    system(strCmd.c_str());
+
+    //5: transfer sam to bam
+    string strBamPath = strRootPath + (strBamFileName == "" ? "Read.bam" : (strBamFileName + ".bam"));
+    strCmd = "samtools view -bS " + strSamPath + " > " + strBamPath;
+    system(strCmd.c_str());
+
+    //6: Sort bam file
+    string strSortedBamPath = strRootPath +
+                              (strBamFileName == "" ? "Read.sorted.bam" :
+                                                      (strBamFileName + ".sorted.bam"));
+    strCmd = "bamtools sort -in " +
+            strBamPath + " -out " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //7:build index file for bam file
+    strCmd = "bamtools index -in " + strSortedBamPath;
+    system(strCmd.c_str());
+
+    //8: delete the bamfile and samfile since they are too large to be stored
+    //a) Delete Sam File
+    strCmd = "rm -f " + strSamPath;
+    system(strCmd.c_str());
+    //b) Delete Bam File
+    strCmd = "rm -f " + strBamPath;
+    system(strCmd.c_str());
+
+    return strSortedBamPath;
+}
+
+string ClsAlgorithm::CreateBamFileForMultiRefSingleReads(string& strRefPath, string& strReadsPath,
+                                                         string strBamFileName, bool bMapAll)
+{
+    string strRootPath = ClsAlgorithm::GetInstance().GetHigherFolderPath(get_current_dir_name());
+    strRootPath += "TempFile/";
+    //2: Build Index for this Reference Fa File
+    string strCmd = "";
+    string strSpcialFileOfRefIndex = strRefPath + ".bwt";
+    if(::access(strSpcialFileOfRefIndex.c_str(), 0) != 0) //This means such file DO NOT exsited
+    {
+        strCmd = "bwa index -a bwtsw " + strRefPath;
+        system(strCmd.c_str());
+    }
+
+    //4: Generate SAM file
+    string strSamPath = strRootPath + (strBamFileName == "" ? "Read.sam" : (strBamFileName + ".sam"));
+    if(bMapAll) //Use map all
+        strCmd = "bwa mem -a " + strRefPath + " " + strReadsPath + " > " + strSamPath;
+    else
+        strCmd = "bwa mem " + strRefPath + " " + strReadsPath + " > " + strSamPath;
     system(strCmd.c_str());
 
     //5: transfer sam to bam
@@ -340,17 +498,21 @@ string ClsAlgorithm::CreateBamFileByMultiScaff(vector<St_ScaffoldUnit>& vScaffol
 
 //This is just for DNA char, since we just considered 4 cases: A, T, G, C
 // AlignType: 0 means 左对齐，1 means 右对齐
-void ClsAlgorithm::GetMostFreqChar(vector<string>& vOrgStr, vector<char>& vMostFreqChar, vector<int>& vFreqValue, int iMaxLen, int iAlignType)
+// Core Idea: Collect the most frequency bp from ACGTN -->So the charactor different from ACGTN will not be took into consideration
+void ClsAlgorithm::GetMostFreqChar(vector<string>& vOrgStr, vector<char>& vMostFreqChar,
+                                   vector<int>& vFreqValue, int iMaxLen,
+                                   En_AlignType enAlignType, bool bTight)
 {
     vMostFreqChar.clear();
     vFreqValue.clear();
+    int iTotalNum = (int)vOrgStr.size();
     for(int i=0; i <iMaxLen; i++)
     {
         char cDNA[vOrgStr.size()];
         int iIndex = 0;
         for(vector<string>::iterator itr = vOrgStr.begin(); itr != vOrgStr.end(); itr++)
         {
-            if(iAlignType == 1) // 如果是右对其
+            if(enAlignType == atRight) // 如果是右对齐
             {
                 if((int)itr->length() > i)
                     cDNA[iIndex] = itr->at(itr->length()-i-1);
@@ -391,6 +553,7 @@ void ClsAlgorithm::GetMostFreqChar(vector<string>& vOrgStr, vector<char>& vMostF
         }
         int iMaxIndex = 0;
         int iMaxCount = aryCount[0];
+        int iValidSum = aryCount[0]; //这个主要是用来过滤的，考虑到有的位置仅仅是某一个(或者少数几个)sequence中是有值的，那么我们统计发现概率很小的话，我们就不去考虑这个值
         for(int i=1; i<4; i++)
         {
             if(iMaxCount < aryCount[i])
@@ -398,9 +561,18 @@ void ClsAlgorithm::GetMostFreqChar(vector<string>& vOrgStr, vector<char>& vMostF
                 iMaxIndex = i;
                 iMaxCount = aryCount[i];
             }
+            iValidSum += aryCount[i];
+        }
+        //这个选项用于控制psuedo repeat中的那种较loss得到combination
+        if(bTight)
+        {
+            //在这里避免低概率的字符被选择-->这里暂时制定的是20%，如果低于20%，那么我们就丢弃,
+            //这里是为了解决将少数派的碱基也作为有效碱基插入，导致错误的extend
+            if((float)iValidSum / iTotalNum < .2)
+                continue;
         }
         //不同的case，插入的方式不一样：右对齐是在头部插入，做对齐是在尾部插入
-        if(iAlignType == 1) //  如果是右对其
+        if(enAlignType == atRight) //  如果是右对其
         {
             if(iMaxCount != 0) //防止盲目的加入，因为考虑到都为"空"的情况
             {
@@ -429,3 +601,80 @@ void ClsAlgorithm::GetMostFreqChar(vector<string>& vOrgStr, vector<char>& vMostF
     }
 }
 
+/*Check the relationship between two ranges
+ * get the overlap
+ * case 0: depart
+ * case 1: the mapping range be contained by the org gap
+ * case 2: org gap range be contained by the mapping range
+ * case 3: the later part of mapping range overlapped with org gap
+ * case 4: the former part of mapping range overlapped with org gap
+ */
+St_RltBTRange ClsAlgorithm::GetTwoRangeRelationship(int iStart1, int iEnd1, int iStart2, int iEnd2)
+{
+    St_RltBTRange stRlt; //the struct of relationship between two ranges
+    if(iEnd1 <= iStart1 || iEnd2 <= iStart2)
+        return stRlt;
+    //case 1: no over lap
+    if(iEnd1 <= iStart2 || iStart1 >= iEnd2)
+    {
+        stRlt.enRangeType = rrDepart;
+        return stRlt;
+    }
+    //Case 2: contained by each other
+    if(iStart1 >= iStart2 && iEnd1 <= iEnd2)
+    {
+        stRlt.iOverlapStart = iStart1;
+        stRlt.iOverlapEnd = iEnd1;
+        stRlt.enRangeType = rrContain;
+        return stRlt;
+
+    }
+    if(iStart2 >= iStart1 && iEnd2 <= iEnd1)
+    {
+        stRlt.iOverlapStart = iStart2;
+        stRlt.iOverlapEnd = iEnd2;
+        stRlt.enRangeType = rrContain;
+        return stRlt;
+    }
+    //Case 3: overlapped by each other --> both former part overlap and later part overlap
+    if(iStart1 < iStart2 && iEnd1 > iStart2 && iEnd1 < iEnd2)
+    {
+        //Update
+        stRlt.iOverlapStart = iStart2;
+        stRlt.iOverlapEnd = iEnd1;
+        stRlt.enRangeType = rrLeftOverlap;
+        return stRlt;
+    }
+    if(iStart2 < iStart1 && iEnd2 > iStart1 && iEnd2 < iEnd1)
+    {
+        //Update
+        stRlt.iOverlapStart = iStart1;
+        stRlt.iOverlapEnd = iEnd2;
+        stRlt.enRangeType = rrRightOverlap;
+        return stRlt;
+    }
+}
+
+bool ClsAlgorithm::IsWholeUpperCase(string& strValue) // just check a,t,g,c
+{
+    if(strValue.find('a') != string::npos ||
+       strValue.find('t') != string::npos ||
+       strValue.find('g') != string::npos ||
+       strValue.find('c') != string::npos)
+        return false;
+    else
+        return true;
+}
+
+//Display the string in file --> multi-lines
+void ClsAlgorithm::DisplayString(ofstream& ofs, string& strValue, int iLenPerLine)
+{
+    int iLineNum = ceil((float)strValue.length() / iLenPerLine);
+    for(int i=0; i<iLineNum; i++)
+    {
+        if(i + 1 == iLineNum) // This is the last item
+            ofs << strValue.substr(i*iLenPerLine, strValue.length() - i*iLenPerLine) << endl;
+        else //This is not the last item
+            ofs << strValue.substr(i*iLenPerLine, iLenPerLine) << endl;
+    }
+}

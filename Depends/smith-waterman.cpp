@@ -1,5 +1,8 @@
 #include"smith-waterman.h"
 #include<iostream>
+#include "string.h"
+#include "stdio.h"
+#include"fasta_parser.h"
 
 const int START=0;
 const int DIAG=1;
@@ -43,14 +46,16 @@ Output:
 */
 void SmithWaterman::align()
 {
+    std::cout << "Ref: " << sref << std::endl;
+    std::cout << "Sgm: " << ssgmt << std::endl;
 	int size_ref=sref.length();
 	int size_sgmt=ssgmt.length();
 
 	loadMatrix(this->score_matrix,size_ref,size_sgmt);
 	initMatrix(size_ref,size_sgmt);
 
-	int ipref=1;
-	int ipsgmt=1;
+    //int ipref=1;
+    //int ipsgmt=1;
 	
 	int max_col=0;
 	int max_row=0;
@@ -61,14 +66,14 @@ void SmithWaterman::align()
 			int diag,left,top;
 			if(ssgmt[i-1]==sref[j-1])
 			{
-				diag=score_matrix[i-1][j-1]+2;
+                diag=score_matrix[i-1][j-1]+ 1;//2;
 			}
 			else
 			{
 				diag=score_matrix[i-1][j-1]-1;
 			}
-			left=score_matrix[i][j-1]-1;
-			top=score_matrix[i-1][j]-1;
+            left=score_matrix[i][j-1]-2;//1;
+            top=score_matrix[i-1][j]-2;//1;
 
 			if(diag<0 && left<0 && top<0)
 			{
@@ -98,23 +103,38 @@ void SmithWaterman::align()
 			}
 		}
 	}
-	
+	    
 	//output socore_matrix/////////////////////////////////////////////////////////////////////
-	//for(int i=1;i<=size_sgmt;i++)
-	//{
-	//	for(int j=1;j<=size_ref;j++)
-	//	{
-	//		std::cout<<path[i][j]<<" ";
-	//	}
-	//	std::cout<<std::endl;
-	//}
-	//std::cout<<max_row<<" "<<max_col<<std::endl; 
-
-
+    /*std::cout << "======Path======" << std::endl;
+    for(int i=1;i<=size_sgmt;i++)
+    {
+        for(int j=1;j<=size_ref;j++)
+        {
+            std::cout<<path[i][j]<<" ";
+        }
+        std::cout<<std::endl;
+    }
+    std::cout << "=====Score=======" << std::endl;
+    for(int i=1;i<=size_sgmt;i++)
+    {
+        for(int j=1;j<=size_ref;j++)
+        {
+            std::cout<<score_matrix[i][j]<<" ";
+        }
+        std::cout<<std::endl;
+    }
+    std::cout<<max_row<<" "<<max_col<<std::endl;*/
 
 	traceback(max_row, max_col);
 
 	freeMatrix(this->score_matrix,size_sgmt);
+}
+
+void SmithWaterman::GetAlnSeqResult(std::string& strRefAln, std::string& strSmpAln)
+{
+    strRefAln = SmithWaterman::m_strAlnRef;
+    strSmpAln = SmithWaterman::m_strAlnSmp;
+    return;
 }
 
 void SmithWaterman::outputCigar()
@@ -125,6 +145,10 @@ void SmithWaterman::outputCigar()
 		std::cout<<cigar[i].first<<cigar[i].second;
 	}
 	std::cout<<std::endl;
+}
+
+void SmithWaterman::outputAlnResult()
+{
 }
 
 //------------private functions---------------------------------------------------------------------------
@@ -148,6 +172,8 @@ void SmithWaterman::traceback(int max_row, int max_col)
 	int len=1;
 	std::string spre_op="";
 	std::string sop;
+    m_strAlnRef = "";
+    m_strAlnSmp = "";
 	while(iprow>0 && ipcol>0)
 	{
 		if(path[iprow][ipcol]==DIAG)
@@ -157,17 +183,31 @@ void SmithWaterman::traceback(int max_row, int max_col)
 				sop=SMATCH;
 			else//decrease
 				sop=SMISMATCH;
+            //Set value to aln result
+            m_strAlnRef = sref.at(ipcol-1) + m_strAlnRef;
+            m_strAlnSmp = ssgmt.at(iprow-1) + m_strAlnSmp;
+
 			iprow--;
 			ipcol--;
 		}
 		else if(path[iprow][ipcol]==TOP)
 		{
 			sop=SINSERTION;
+
+            //Set value to aln result
+            //m_strAlnRef = sref.at(ipcol-1) + m_strAlnRef;
+            m_strAlnSmp = ssgmt.at(iprow-1) + m_strAlnSmp;
+
 			iprow--;
 		}
 		else if(path[iprow][ipcol]==LEFT)
 		{
 			sop=SDELETION;
+
+            //Set value to aln result
+            m_strAlnRef = sref.at(ipcol-1) + m_strAlnRef;
+            //m_strAlnSmp = ssgmt.at(iprow-1) + m_strAlnSmp;
+
 			ipcol--;
 		}
 		else
@@ -175,8 +215,6 @@ void SmithWaterman::traceback(int max_row, int max_col)
 			sop=SSTART;
 			break;
 		}
-
-		
 
 		if(sop!=spre_op)
 		{
@@ -187,13 +225,13 @@ void SmithWaterman::traceback(int max_row, int max_col)
 		}
 		else
 			len++;
-	
 
 		spre_op=sop;
 	}//end of while 
 	cigar.push_back(std::make_pair(len,spre_op));
+    std::cout << "Ref Aln Result: " << m_strAlnRef << std::endl;
+    std::cout << "Smp Aln Result: " << m_strAlnSmp << std::endl;
 }
-
 
 //create a size_ptn* size_ref matrix
 void SmithWaterman::loadMatrix(int** &matrix, int size_ref, int size_sgmt)

@@ -27,7 +27,7 @@ int main(int argc, char **argv)
 {
     //Step 1: Check Parameters
     //------------------->
-    //Parameter 1: Repeat File
+    //Parameter 1: Repeat File --> Means the most frequency K-mer (K-mer counting(Jellyfish))
     //Parameter 2: scaffoldFile
     //Parameter 3: reads1
     //Parameter 4: reads2

@@ -1,6 +1,7 @@
 //#include "clscorestructure.h"
 #include "clsalgorithm.h"
 #include <algorithm>
+#include "math.h"
 /*
  * The very basical structure of gap filling: it defines what the gap it is.
  */
@@ -47,6 +48,14 @@ void St_Gap::RefinedByN(string& strOrg, string& strDest)
 
 /* This structure focus on record all of Repeats info from the "repeat file"
  * We use the "St_RepeatUnit" as each Unit, and "St_RepeatFile" to manage the whole repeats
+ *
+ * Function: Init  **********
+ * 1: Record each repeats into the data structure
+ * 2: Set the k-mer length to 10, and calculate all of k-mer's value (int 64).
+ *    *The target is use those values for k-mer comparison later.
+ *    *Use int for comparison will be very convenient
+ * 3: Consider both current normal repeats and its relevant complementary
+ * *********************
  */
 //-------->The function of Structure
 //NOTICE: we need to read the repeats at one time, for this is the very basical element for gap filling
@@ -149,6 +158,13 @@ void St_ScaffoldUnit::RefineFlank(St_Gap& stCurGap)
     stCurGap.RefinedByN(stCurGap.strRightFlank, stCurGap.strRefinedRightFlank);
 }
 
+/*
+ * the main idea of this function is that:
+ * 1: get the real string value of the left flank and the right flank for current gap
+ *      * the length is: MaxRepeatLen * fRatioTolerent
+ *      * the default value of fRatioTolerent is 0.3
+ * 2: Then, as the same way as repeats to calculate its relevant kmer value
+ */
 void St_ScaffoldUnit::InitKmerInfoForOneGap(St_Gap& stGap, string& strRefSeq, int iMaxReptLen)
 {
     //we need to set value for the following variantns
@@ -179,7 +195,7 @@ void St_ScaffoldUnit::InitKmerInfoForOneGap(St_Gap& stGap, string& strRefSeq, in
     }
     else
     {
-        strRefSeq.substr(stGap.iEndPos+1, iRightFlankLen);
+        stGap.strRightFlank = strRefSeq.substr(stGap.iEndPos+1, iRightFlankLen);
         stGap.iRightFlankEnd = stGap.iEndPos + iRightFlankLen;
     }
 
@@ -237,12 +253,34 @@ void St_ScaffoldUnit::UpdateRefinedSeqByRepeats()
         }
         if(itrGap->bFilled) //1: if such gap has been fixed
         {
-            strRefinedSeq += itrGap->strFillSeq;
-            stNewGap.stBamGap.iStartPos = strRefinedSeq.length();
-            strRefinedSeq += cGAPSYMBOL;
-            stNewGap.stBamGap.iEndPos = strRefinedSeq.length() - 1;
-            stNewGap.stBamGap.iLen = string(cGAPSYMBOL).length();
-            stNewGap.pOrgGap = &(*itrGap);
+            if(itrGap->enGapType == gtRight) // 相当于直接接在了左边，因此我们是在右边补加NNNN，从而进行下一步的填补
+            {
+                strRefinedSeq += itrGap->strFillSeq;
+                stNewGap.stBamGap.iStartPos = strRefinedSeq.length();
+                strRefinedSeq += cGAPSYMBOL;
+                stNewGap.stBamGap.iEndPos = strRefinedSeq.length() - 1;
+                stNewGap.stBamGap.iLen = string(cGAPSYMBOL).length();
+                stNewGap.pOrgGap = &(*itrGap);
+            }
+            else if(itrGap->enGapType == gtLeft) // 相当于接在了右边，因此我们是在左边补加NNNN，从而进行下一步的填补
+            {
+                stNewGap.stBamGap.iStartPos = strRefinedSeq.length();
+                strRefinedSeq += cGAPSYMBOL;
+                stNewGap.stBamGap.iEndPos = strRefinedSeq.length() - 1;
+                stNewGap.stBamGap.iLen = string(cGAPSYMBOL).length();
+                strRefinedSeq += itrGap->strFillSeq;
+                stNewGap.pOrgGap = &(*itrGap);
+            }
+            else if(itrGap->enGapType == gtCenter) // 相当于都接上了，因此直接填补，不需要补加NNNN
+            {
+                strRefinedSeq += itrGap->strFillSeq;
+                stNewGap.stBamGap.iStartPos = -1;
+                stNewGap.stBamGap.iEndPos = -1;
+                stNewGap.stBamGap.iLen = -1;
+                stNewGap.pOrgGap = &(*itrGap);
+            }
+            else //Do nothing (theroatically, this case will never be happend)
+            {}
         }
         else //Do not fix by repeat
         {
@@ -289,6 +327,7 @@ void St_ScaffoldUnit::UpdateQuality(int iMatechedReads, int iSoftClipReads)
     int iValidChar = strRefinedSeq.length() - iN;
     float fBound1AnyMatch = iValidChar * .5;
     float fBound2AnyMatch = iValidChar * .25;
+    // 这几个softclip边界值的定义我没有看的很明白，可能以后需要进行相应的修改
     // 50 意味着首位总公产生50个soft clip,然后我们考虑到整体的有效的字符数，然后取较小的那个值
     float fBoundPartMatch = (iSoftClipReads > 200 ? 200 : iSoftClipReads) * .5 +
                             50 > (iValidChar/4) ? (iValidChar/4) : 50;
@@ -310,11 +349,69 @@ void St_ScaffoldUnit::UpdateQuality(int iMatechedReads, int iSoftClipReads)
         enQuality = sqLow;
 }
 
-//////////////////////////St_ScaffoldFile/////////////////////////////////////////////////
-void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMaxRepLen)
+//Check Filling Result
+void St_ScaffoldUnit::CheckFillingResult(string& strReads1Path, string& strReads2Path)
 {
-    vector<St_Fasta> vFastaData;
-    pFastaParse->ReadFasta(strFilePath, vFastaData);
+    //Step1: Arrange the filling information and generate the real filling result
+    UpdateFinalSeq(); //Finished
+    //Step2: Analysis the result -->how to get it
+    stFinalRst.QualityCheckByPEReads(this->strName, strReads1Path, strReads2Path);
+    //Step3: If the result is ok, refine the result again by considering all the reads
+    //which maps back to the rang of gap
+}
+
+/*Arrange the filling information and generate the real filling result
+ * Logic:
+ * 1: The final result of filling
+ * 2: filling start and filling end
+ */
+void St_ScaffoldUnit::UpdateFinalSeq()
+{
+    if(vGapRefinedByRept.empty()) // means there is no gap
+    {
+        // Set the value directly if there is not gap.
+        stFinalRst.strSeq = strRefinedSeq;
+        return;
+    }
+    //For each gap
+    int iOffSet = 0;
+    stFinalRst.vBorder.clear();
+    int iSumLen = strRefinedSeq.length();
+    for(vector<St_GapRefinedByRept>::iterator itr = vGapRefinedByRept.begin();
+        itr != vGapRefinedByRept.end(); itr++)
+    {
+        //Set the left part of Sequence
+        stFinalRst.strSeq += strRefinedSeq.substr(iOffSet, (itr->stBamGap.iStartPos - iOffSet));
+        iOffSet = itr->stBamGap.iStartPos;
+        //-->record start
+        //We need to consider the most original filling pos --> the start filling pos of repeats !!!!!!!!
+        int iStart = (int)stFinalRst.strSeq.length() - (int)itr->pOrgGap->strFillSeq.length();
+        int iBKPEAndRepeats = (int)stFinalRst.strSeq.length();
+        //Set the fixed part of Sequence
+        stFinalRst.strSeq += itr->stBamGap.strFillSeq; //"AAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        //Set the right part of sequence: currently, there is no right part, since we do not add any additional gap into the final result
+        //-->record end
+        iOffSet = itr->stBamGap.iEndPos + 1;
+        int iEnd = (int)stFinalRst.strSeq.length() - 1;
+
+        //Record the border information
+        stFinalRst.vBorder.push_back(St_FillingBorder(iStart, iEnd, iBKPEAndRepeats));
+        //Add the last part if the current gap is the last gap
+        if(itr + 1 == vGapRefinedByRept.end()) // this is the last gap: add the last part into the new sequence
+        {
+            stFinalRst.strSeq += strRefinedSeq.substr(iOffSet, (strRefinedSeq.length() - iOffSet));
+        }
+    }
+    string strTest = stFinalRst.strSeq.substr(stFinalRst.strSeq.length() - 15, 15);
+    iSumLen = stFinalRst.strSeq.length();
+}
+
+//////////////////////////St_ScaffoldFile/////////////////////////////////////////////////
+//读取Scaffold的数据
+void St_ScaffoldFile::Init(vector<St_Fasta>& vFastaData, int iMaxRepLen)
+{
+    //vector<St_Fasta> vFastaData;
+    //pFastaParse->ReadFasta(strFilePath, vFastaData);
     //Transfer vData to vector<St_ScaffoldUnit>
     //首先需要预估计相应的长度
     unsigned int iDataNum = 0;
@@ -336,12 +433,12 @@ void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMa
     {
         if(itrFasta->strName.find("scaffold") == string::npos) // 在名字里面没有scaffold,证明不是scaffold
             break;
-        if(itrFasta->strName.find(' ') == string::npos) // discard the name after ' '
+        if(itrFasta->strName.find(' ') == string::npos) //Use the full name as the scaffold name if there is no " "
             itr->strName = itrFasta->strName;
         else
         {
             int iValidLen = itrFasta->strName.find(' ');
-            itr->strName = itrFasta->strName.substr(0, iValidLen);
+            itr->strName = itrFasta->strName.substr(0, iValidLen); //discard the name after ' '
         }
 
         itr->strSeq = itrFasta->strSeq;
@@ -358,7 +455,7 @@ void St_ScaffoldFile::Init(string strFilePath, FastaParser* pFastaParse, int iMa
         iIndex++;
         //if(iIndex > 5000) // 为了测试青蛙的真实数据，防治被kill做的临时性代码
         //   break;
-    }
+    }    
 }
 //<--------
 //////////////////////////////////////////////////////////////////////////////////
@@ -374,3 +471,141 @@ string St_SoftClipReads::GetExtdSeq()
     return ClsAlgorithm::GetInstance().GetReverseCompelement(strExtendSeq);
 }
 //////////////////////////////////////////////////////////
+
+/*
+ * For contigs initiation
+ */
+void St_Contigs::Init(vector<St_Fasta>& vFastaData)
+{
+    //首先需要预估计相应的长度
+    unsigned int iDataNum = 0;
+    for(vector<St_Fasta>::iterator itrFasta = vFastaData.begin();
+        itrFasta != vFastaData.end(); itrFasta++)
+    {
+        if(itrFasta->strName.find("scaffold") != string::npos) // 跳过scaffold，我们只将没有成功参与形成scaffold的contig视为draft geno
+            continue;
+        else
+            iDataNum++;
+    }
+    cout << IntToStr(iDataNum) << endl;
+    vData.resize(iDataNum);
+    int iIndex = 0;
+    //Set value to each scaffold unit
+    for(vector<St_Fasta>::iterator itrFasta = vFastaData.begin();
+        itrFasta != vFastaData.end(); itrFasta++)
+    {
+        if(itrFasta->strName.find("scaffold") != string::npos) // 在名字有scaffold,证明是scaffold，那么我们就跳过去
+            continue;
+        if(itrFasta->strName.find(' ') == string::npos) //Use the full name as the scaffold name if there is no " "
+            vData[iIndex].strName = itrFasta->strName;
+        else
+        {
+            int iValidLen = itrFasta->strName.find(' ');
+            vData[iIndex].strName = itrFasta->strName.substr(0, iValidLen); //discard the name after ' '
+        }
+
+        vData[iIndex].strSeq = itrFasta->strSeq;
+        vData[iIndex].iID = iIndex;
+        //<--
+        cout << IntToStr(iIndex) << "/" << IntToStr(iDataNum) << endl;
+        iIndex++;
+        //if(iIndex > 5000) // 为了测试青蛙的真实数据，防治被kill做的临时性代码
+        //   break;
+    }
+}
+
+//////////////////////////////////////////St_FinalFilling///////////////////////////////////////////////////
+void St_FinalFilling::QualityCheckByPEReads(string& strScafName,
+                                            string& strReads1Path, string& strReads2Path)
+{
+    //Step2: Create fasta file & Step3: Use pair-end reads map back to fasta file
+    string strBamFilePath = ClsAlgorithm::GetInstance().CreateBamFile(strScafName + "_Final", strSeq,
+                                                                      strReads1Path, strReads2Path);
+    BamReader* pBamReader = new BamReader();
+    pBamReader->Open(strBamFilePath);
+    pBamReader->OpenIndex(strBamFilePath + ".bai");
+    map<int, St_MappingResult> mpGapSupportPEReads; // the number of PE Reads which support such Gap
+    //Variant of pair end reads alignment
+    BamAlignment al;
+    //vector<int> clipSizes;
+    //vector<int> readPositions;
+    //vector<int> genomePositions;
+    while(pBamReader->GetNextAlignment(al)) //Get each alignment result
+    {
+        /* Strategy:
+         * 1: get all of reads which could map back to reference geno
+         * 2: check if one could be find out of gap
+         * 3: check if its mat could be find in the gap filling sequence
+         * 4: quality
+         * (1) count the successful mapping, no matter which kind of statments it could be
+         * (2) consid the softclip reads, and collect those kind of mapping cases
+         */
+         if(!al.IsMapped() || !al.IsMateMapped()) // we just consider the reads mapping successfully in both itself and its mate
+             continue;         
+         //The below if the mapping case         
+         St_RltBTRange stRltBTRange = GetOverlapStates(al.Position, al.GetEndPosition(),
+                                                       al.Length, true);
+         //If could be found
+         if(stRltBTRange.iGapIndex >= 0)
+         {            
+            mpGapSupportPEReads[stRltBTRange.iGapIndex].iCount++;
+            mpGapSupportPEReads[stRltBTRange.iGapIndex].vMapReads.push_back(St_OverLapState(St_CPoint(al.Position, al.GetEndPosition()),
+                                                                            stRltBTRange));
+         }
+    }
+    delete pBamReader;
+    pBamReader = NULL;
+    //Check the hitting result // success    
+    this->vCoverage.resize(this->vBorder.size());
+    for(map<int, St_MappingResult>::iterator itr = mpGapSupportPEReads.begin();
+        itr != mpGapSupportPEReads.end(); itr++)
+    {
+        int iCount = 0;
+        for(vector<St_OverLapState>::iterator itrPEMap = itr->second.vMapReads.begin();
+            itrPEMap < itr->second.vMapReads.end(); itrPEMap++)
+        {
+            iCount += itrPEMap->stRltBTRange.GetOverlapLen();
+        }
+        int iGapFillLen = vBorder[itr->first].iEnd - vBorder[itr->first].iStart + 1;
+        this->vCoverage[itr->first] = ceil((float)iCount / iGapFillLen);
+    }   
+}
+
+St_RltBTRange St_FinalFilling::GetOverlapStates(int iMapStartPos, int iMapEndPos,
+                                                int iBaseLen, bool bRealCase)
+{
+    St_RltBTRange stRltRange;
+    int iIndex = 0;
+    for(vector<St_FillingBorder>::iterator itr = vBorder.begin(); itr != vBorder.end(); itr++)
+    {
+        if(bRealCase) //this is the length of the real case
+            stRltRange = ClsAlgorithm::GetInstance().GetTwoRangeRelationship(itr->iStart, itr->iEnd, iMapStartPos, iMapEndPos);
+        else // this is not theoretical case
+            stRltRange = ClsAlgorithm::GetInstance().GetTwoRangeRelationship(itr->iStart, itr->iEnd,
+                                                                             iMapStartPos, iMapStartPos + iBaseLen);
+        switch(stRltRange.enRangeType)
+        {
+            case rrDepart:
+                break;
+            case rrContain:
+                //stRltRange.iGapIndex = iIndex;
+                //break;
+            case rrLeftOverlap:
+                //stRltRange.iGapIndex = iIndex;
+                //break;
+            case rrRightOverlap:
+                stRltRange.iGapIndex = iIndex;
+                break;
+            case rrAbnormal:
+                break;
+            default:
+                break;
+        }
+        if(stRltRange.iGapIndex >= 0)
+            break;
+        else
+            iIndex++;
+    }    
+    return stRltRange;
+}
+

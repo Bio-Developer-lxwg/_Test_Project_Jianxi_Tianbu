@@ -3,7 +3,6 @@
 #include"fasta_parser.h"
 #include "KmerUtils.h"
 #include "api/BamReader.h"
-
 using namespace BamTools;
 
 /*
@@ -11,6 +10,28 @@ using namespace BamTools;
  */
 enum En_MatchType{mtNone=0, mtNormal, mtCompleRev, mtMax};
 enum En_GapType{gtNone=0, gtLeft, gtCenter, gtRight, gtMax};
+enum En_FillResult{frNone=0, frAllPass, frLeftFail, frRighFail, frAllFail, frMax}; //Fill result identification
+
+//Basical Structure --> Gneral Math Algorithm
+enum En_RangeRltsp{rrDepart=0, rrLeftOverlap, rrRightOverlap, rrContain, rrAbnormal, rrMax}; // The relationship of two ranges
+struct St_RltBTRange //the struct of relationship between two ranges
+{
+    En_RangeRltsp enRangeType;
+    int iOverlapStart;
+    int iOverlapEnd;
+    int iGapIndex;
+
+    St_RltBTRange():enRangeType(rrAbnormal), iOverlapStart(-1), iOverlapEnd(-1), iGapIndex(-1)
+    {}
+
+    //-->Function
+    int GetOverlapLen() // get the overlap length
+    {
+        return iOverlapEnd - iOverlapStart + 1;
+    }
+    //<--
+};
+
 struct St_Gap
 {
     int iStartPos; //in scaffold
@@ -41,11 +62,15 @@ struct St_Gap
     int iEstimateLen;
     bool bAbnormalLarge;
 
+    //定义最后的结果是否已经被成功填补完成
+    En_FillResult enFillResult;
+
     bool CouldFill();
     void RefinedByN(string& strOrg, string& strDest);
     St_Gap():iStartPos(-1), iEndPos(-1), iLen(-1), fRatioTolerent(0.3), iKmerLen(10),
              strFillSeq(""), bFilled(false), enLFMatchType(mtNone), enRFMatchType(mtNone),
-             enGapType(gtNone), iReptStart(-1), iReptEnd(-1), iEstimateLen(-1), bAbnormalLarge(false)
+             enGapType(gtNone), iReptStart(-1), iReptEnd(-1), iEstimateLen(-1), bAbnormalLarge(false),
+             enFillResult(frNone)
     {}
 };
 
@@ -82,8 +107,12 @@ struct St_RepeatFile
     {}
 };
 ////////////////////////////////////////////////////////////////////////
+/*
+ * we need to identify the type of third party tools to restrict parsing method
+ */
+enum En_AssemblyTool{atSoapDenovo=0, atMax};
 
-/*The section of Scaffold structure identification:
+/*The section of Draft Geno 1: Scaffold structure identification:
  * 1: St_GapRefinedByRept: record the updated gap after filled by repeat
  * 2: St_ScaffoldUnit: this is the scaffold uint, designing for the single scaffold
  * 3: St_ScaffoldFile: manage all of scaffold
@@ -103,6 +132,74 @@ struct St_GapRefinedByRept
 };
 
 enum En_ScaffoldQuality {sqNone=0, sqLow, sqNorm, sqHigh, sqMax};
+
+struct St_CPoint
+{
+    int iStart;
+    int iEnd;
+    St_CPoint(): iStart(-1), iEnd(-1)
+    {}
+
+    St_CPoint(int iStartValue, int iEndValue)
+    {
+        iStart = iStartValue;
+        iEnd = iEndValue;
+    }
+};
+
+struct St_OverLapState
+{
+    St_CPoint stBorder;
+    St_RltBTRange stRltBTRange;
+    //Default constructure
+    St_OverLapState()
+    {}
+    //special construture
+    St_OverLapState(St_CPoint stPointValue, St_RltBTRange stRltBTRangeValue)
+    {
+        stBorder = stPointValue;
+        stRltBTRange = stRltBTRangeValue;
+    }
+};
+
+struct St_MappingResult
+{
+    int iCount;
+    vector<St_OverLapState> vMapReads; // Just Start and End
+
+    St_MappingResult(): iCount(0)
+    {}
+};
+
+struct St_FillingBorder
+{
+    int iStart;
+    int iEnd;
+    int iBKPEAndRepeats; // break point between Pair-End Reads and Repeats
+    //Default Constucture
+    St_FillingBorder(): iStart(-1), iEnd(-1), iBKPEAndRepeats(-1)
+    {}
+    //Customized Constructure
+    St_FillingBorder(int iStartValue, int iEndValue, int iBKPEAndRepeatsValue)
+    {
+        iStart = iStartValue;
+        iEnd = iEndValue;
+        iBKPEAndRepeats = iBKPEAndRepeatsValue;
+    }
+};
+
+struct St_FinalFilling // 以一个scaffold为单位进行考虑
+{
+    vector<St_FillingBorder> vBorder; //This is the gap border
+    string strSeq; //The final filling sequence: notice we do not add any NNNNN into it.
+    vector<int> vCoverage; // the coverage calculated by PE reads for each gap
+
+    //Function
+    void QualityCheckByPEReads(string& strScafName,
+                               string& strReads1Path, string& strReads2Path); // 使用pair end reads，检查填补的质量
+    St_RltBTRange GetOverlapStates(int iMapStartPos, int iMapEndPos, int iBaseLen, bool bRealCase = false);
+};
+
 struct St_ScaffoldUnit
 {
     string strName;
@@ -115,10 +212,18 @@ struct St_ScaffoldUnit
 
     En_ScaffoldQuality enQuality;
 
+    //---->Record the final filling result
+    St_FinalFilling stFinalRst; // Final Filling Result
+    //<----
+
     void FindGaps();
     void InitKmerInfoForOneGap(St_Gap& stGap, string& strRefSeq, int iMaxReptLen);
     void RefineFlank(St_Gap& stCurGap);
     void UpdateRefinedSeqByRepeats();
+    //Update Final Filling Result-->
+    void CheckFillingResult(string& strReads1Path, string& strReads2Path);
+    void UpdateFinalSeq();
+    //<--
     bool IsMissing(char nt)
     {
         return nt == 'N' || nt == 'n';
@@ -133,9 +238,32 @@ struct St_ScaffoldUnit
 struct St_ScaffoldFile
 {
     vector<St_ScaffoldUnit> vData;
-    FastaParser* pFastaParse;
-    void Init(string strFilePath, FastaParser* pFastaParse, int iMaxRepLen);
-    St_ScaffoldFile()
+    En_AssemblyTool enAsmbTool; //Assembly Tool
+    //FastaParser* pFastaParse;
+    void Init(vector<St_Fasta>& vFastaData, int iMaxRepLen);
+    St_ScaffoldFile(): enAsmbTool(atSoapDenovo)
+    {}
+};
+
+/*
+ * Section of Draft Geno 2: Contigs
+ */
+struct St_ContigUnit
+{
+    string strName;
+    string strSeq;
+    int iID;
+    St_ContigUnit():strName(""), strSeq(""), iID(-1)
+    {}
+};
+
+struct St_Contigs
+{
+    En_AssemblyTool enAsmbTool; //Assembly Tool
+    vector<St_ContigUnit> vData;
+
+    void Init(vector<St_Fasta>& vFastaData);
+    St_Contigs(): enAsmbTool(atSoapDenovo)
     {}
 };
 ////////////////////////////////////////////////////////////////////////////////////////
